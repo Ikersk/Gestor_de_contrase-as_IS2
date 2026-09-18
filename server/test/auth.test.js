@@ -133,3 +133,27 @@ test('rejects malformed registration and login payloads with 400', async () => {
   assert.equal((await request(app).post('/api/auth/register').send(malformed)).status, 400);
   assert.equal((await request(app).post('/api/auth/login').send(malformed)).status, 400);
 });
+
+test('rejects emails longer than the protocol limit', async () => {
+  const app = createApp({ dbPool: makePool() });
+  const oversized = validRegistration(`${'a'.repeat(245)}@example.com`);
+
+  assert.equal((await request(app).post('/api/auth/register').send(oversized)).status, 400);
+  assert.equal((await request(app).post('/api/auth/login').send(oversized)).status, 400);
+});
+
+test('sends a strict CSP and only allows the configured frontend origin', async () => {
+  const app = createApp({ dbPool: makePool() });
+  const allowed = await request(app)
+    .get('/health')
+    .set('Origin', 'http://localhost:5173');
+  const denied = await request(app)
+    .get('/health')
+    .set('Origin', 'https://untrusted.example');
+
+  assert.match(allowed.headers['content-security-policy'], /default-src 'self'/);
+  assert.doesNotMatch(allowed.headers['content-security-policy'], /unsafe-inline|unsafe-eval/);
+  assert.equal(allowed.headers['access-control-allow-origin'], 'http://localhost:5173');
+  assert.equal(allowed.headers['access-control-allow-credentials'], 'true');
+  assert.notEqual(denied.headers['access-control-allow-origin'], 'https://untrusted.example');
+});

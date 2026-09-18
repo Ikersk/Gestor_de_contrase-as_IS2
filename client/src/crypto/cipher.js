@@ -23,22 +23,27 @@ function serializeEntry(entry) {
 
 /** Cifra una credencial con un IV nuevo por defecto y devuelve blobs transportables en JSON. */
 export async function encryptItem(vaultKey, entry, iv = randomBytes(AES_GCM_IV_BYTES)) {
+  const plaintext = new TextEncoder().encode(serializeEntry(entry));
+  const encryptedValue = await encryptBytes(vaultKey, plaintext, iv);
+
+  return {
+    iv: bytesToBase64(iv),
+    ciphertext: bytesToBase64(encryptedValue),
+  };
+}
+
+/** Cifra bytes crudos para verificar el protocolo contra vectores externos conocidos. */
+export async function encryptBytes(vaultKey, plaintext, iv) {
   if (iv.byteLength !== AES_GCM_IV_BYTES) {
     throw new Error(`Item IV must be exactly ${AES_GCM_IV_BYTES} bytes`);
   }
 
   const key = await importVaultKey(vaultKey, ['encrypt']);
-  const plaintext = new TextEncoder().encode(serializeEntry(entry));
-  const ciphertext = await crypto.subtle.encrypt(
+  return crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: asBytes(iv), tagLength: 128 },
     key,
-    plaintext,
+    asBytes(plaintext),
   );
-
-  return {
-    iv: bytesToBase64(iv),
-    ciphertext: bytesToBase64(ciphertext),
-  };
 }
 
 /** Descifra y deserializa una credencial; AES-GCM autentica el contenido antes de devolverlo. */

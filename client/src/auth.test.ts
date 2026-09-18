@@ -5,6 +5,7 @@ import {
   logoutFromMemory,
   registerWithMasterPassword,
 } from './auth';
+import { createVaultItem } from './api';
 import { DEFAULT_KDF_ITERATIONS, deriveMasterKey, deriveSubkeys, bytesToBase64 } from './crypto/kdf.js';
 import { wrapVaultKey } from './crypto/vault-key.js';
 
@@ -66,5 +67,16 @@ describe('client authentication flow', () => {
 
     await logoutFromMemory();
     expect(getVaultKey()).toBeNull();
+  });
+});
+
+describe('vault API response handling', () => {
+  it('reads the id from a JSON 201 response', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ id: 42 }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    )));
+
+    await expect(createVaultItem({ iv: 'iv', ciphertext: 'ciphertext' })).resolves.toEqual({ id: 42 });
   });
 });

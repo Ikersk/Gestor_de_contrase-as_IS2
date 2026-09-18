@@ -9,6 +9,7 @@ import {
 } from './crypto/kdf.js';
 import { generateVaultKey, unwrapVaultKey, wrapVaultKey } from './crypto/vault-key.js';
 import { getAuthSalt, loginAccount, logoutAccount, registerAccount } from './api';
+import { validateEmail, validateMasterPassword } from './validation';
 
 let vaultKey: Uint8Array | null = null;
 
@@ -19,6 +20,11 @@ export function getVaultKey() {
 
 /** Deriva el material de autenticacion y envuelve una nueva Vault Key durante el registro. */
 export async function registerWithMasterPassword(email: string, masterPassword: string) {
+  const emailError = validateEmail(email);
+  const passwordError = validateMasterPassword(masterPassword);
+  if (emailError) throw new Error(emailError);
+  if (passwordError) throw new Error(passwordError);
+
   const salt = randomBytes(16);
   const masterKey = await deriveMasterKey(masterPassword, salt, DEFAULT_KDF_ITERATIONS);
   const { encryptionKey, authHash } = await deriveSubkeys(masterKey);
@@ -37,6 +43,11 @@ export async function registerWithMasterPassword(email: string, masterPassword: 
 
 /** Deriva el Auth Hash, inicia sesion y desenvuelve la Vault Key solo en memoria. */
 export async function loginWithMasterPassword(email: string, masterPassword: string) {
+  const emailError = validateEmail(email);
+  const passwordError = validateMasterPassword(masterPassword);
+  if (emailError) throw new Error(emailError);
+  if (passwordError) throw new Error(passwordError);
+
   vaultKey = null;
   const { kdfSalt, kdfIterations } = await getAuthSalt(email);
   const masterKey = await deriveMasterKey(

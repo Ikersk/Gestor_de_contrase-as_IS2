@@ -10,6 +10,14 @@ export interface LoginResponse {
   wrapIv: string;
 }
 
+export interface VaultItemResponse {
+  id: number | string;
+  iv: string;
+  ciphertext: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -33,7 +41,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error(message);
   }
 
-  if (response.status === 201 || response.status === 204) return undefined as T;
+  // Algunos 201 no llevan cuerpo (registro), pero crear un item devuelve JSON con su id.
+  if (response.status === 204 || !response.headers.get('content-type')) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -68,4 +77,30 @@ export function loginAccount(payload: { email: string; authHash: string }) {
 /** Solicita el borrado de la cookie de sesion del navegador. */
 export function logoutAccount() {
   return request<void>('/auth/logout', { method: 'POST' });
+}
+
+/** Recupera los blobs cifrados de la cuenta activa; nunca devuelve texto plano. */
+export function getVaultItems() {
+  return request<VaultItemResponse[]>('/vault');
+}
+
+/** Persiste un item ya cifrado por el cliente y devuelve su identificador. */
+export function createVaultItem(payload: { iv: string; ciphertext: string }) {
+  return request<{ id: number | string }>('/vault', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Reemplaza el blob cifrado de un item perteneciente a la cuenta activa. */
+export function updateVaultItem(id: number | string, payload: { iv: string; ciphertext: string }) {
+  return request<void>(`/vault/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Elimina un item de la cuenta activa por su identificador. */
+export function deleteVaultItem(id: number | string) {
+  return request<void>(`/vault/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
