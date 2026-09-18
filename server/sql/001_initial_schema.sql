@@ -1,0 +1,25 @@
+CREATE TABLE IF NOT EXISTS users (
+  id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email             TEXT NOT NULL UNIQUE,
+  kdf_salt          TEXT NOT NULL,
+  kdf_iterations    INTEGER NOT NULL,
+  auth_hash_hashed  TEXT NOT NULL,
+  wrapped_vault_key TEXT NOT NULL,
+  wrap_iv           TEXT NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS vault_items (
+  id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  iv         TEXT NOT NULL,
+  ciphertext TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS vault_items_user_id_idx
+  ON vault_items (user_id);
+
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vault_items ENABLE ROW LEVEL SECURITY;

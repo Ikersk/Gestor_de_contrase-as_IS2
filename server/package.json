@@ -6,15 +6,17 @@
   "main": "src/app.js",
   "scripts": {
     "dev": "nodemon src/app.js",
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "db:check": "node src/migrate.js --check",
+    "db:migrate": "node src/migrate.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "better-sqlite3": "11.10.0",
     "dotenv": "latest",
-    "express": "latest"
+    "express": "latest",
+    "pg": "latest"
   },
   "devDependencies": {
     "nodemon": "latest"

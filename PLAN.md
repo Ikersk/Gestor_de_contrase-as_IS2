@@ -23,7 +23,7 @@ Al final de cada fase hay un prompt sugerido, listo para copiar y pegar.
 
 | Capa | Tecnología elegida | Por qué esta y no otra |
 |---|---|---|
-| Base de datos | **SQLite** vía `better-sqlite3` | Un solo archivo, API síncrona, cero configuración de servidor. Evita la complejidad de Postgres/Prisma sin sacrificar SQL real. |
+| Base de datos | **PostgreSQL** vía `pg`, alojado en Supabase | PostgreSQL gestionado, SQL real, persistencia remota y soporte para concurrencia y despliegue. |
 | Backend | **Node.js + Express.js** | Pedido en el enunciado. Mínimo boilerplate. |
 | Hash servidor del Auth Hash | **argon2** (paquete npm) — alternativa: **bcryptjs** si da problemas de compilación nativa | Segunda capa de hashing independiente de la derivación del cliente. |
 | Frontend | **Vanilla JS/TypeScript + Vite** | Te obliga a tocar la Web Crypto API directamente sin que un framework la esconda. Si ya dominas React, es intercambiable sin cambiar el resto del plan. |
@@ -44,14 +44,14 @@ Al final de cada fase hay un prompt sugerido, listo para copiar y pegar.
 password-manager-zk/
 ├── server/
 │   ├── src/
-│   │   ├── db.js              # conexión SQLite + schema
+│   │   ├── db.js              # pool PostgreSQL + acceso a la base
 │   │   ├── routes/
 │   │   │   ├── auth.js        # register, salt, login, logout
 │   │   │   └── vault.js       # CRUD de blobs cifrados
 │   │   ├── middleware/
 │   │   │   └── requireAuth.js
 │   │   └── app.js
-│   ├── data/app.db             # archivo SQLite (gitignore)
+│   ├── sql/001_initial_schema.sql # migración inicial PostgreSQL
 │   ├── tests/
 │   │   ├── crypto-vectors.test.js
 │   │   └── zero-knowledge-audit.test.js   # revisa la DB en crudo
@@ -70,31 +70,32 @@ password-manager-zk/
 
 ---
 
-## 3. Esquema de base de datos (SQLite)
+## 3. Esquema de base de datos (PostgreSQL)
 
 ```sql
 CREATE TABLE users (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   email               TEXT UNIQUE NOT NULL,
   kdf_salt            TEXT NOT NULL,       -- base64, generado en el CLIENTE
   kdf_iterations      INTEGER NOT NULL,    -- ej. 600000
   auth_hash_hashed    TEXT NOT NULL,       -- argon2(authHash del cliente)
   wrapped_vault_key   TEXT NOT NULL,       -- base64, AES-GCM(vaultKey)
   wrap_iv             TEXT NOT NULL,       -- base64, 12 bytes
-  created_at          TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE vault_items (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   iv          TEXT NOT NULL,   -- base64, 12 bytes, único por item
   ciphertext  TEXT NOT NULL,   -- base64
-  created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-Nota deliberada: ningún campo de esta base de datos, mirado directamente con `sqlite3 data/app.db "SELECT * FROM vault_items"`, debe permitir deducir nada sobre el contenido real.
+Nota deliberada: ningún campo de esta base de datos debe permitir deducir nada
+sobre el contenido real de los elementos cifrados.
 
 ---
 
@@ -149,10 +150,10 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 ## 6. Plan de fases
 
 ### Fase 0 — Scaffolding
-**Tareas:** estructura de carpetas, `package.json` en server y client, Vite configurado, Express con endpoint `/health`, conexión a SQLite y creación de tablas si no existen.
+**Tareas:** estructura de carpetas, `package.json` en server y client, Vite configurado, Express con endpoint `/health`, conexión a PostgreSQL y creación idempotente del esquema.
 **Criterio de aceptación:** `npm run dev` en ambas carpetas levanta sin errores; `/health` responde 200.
 
-> **Prompt:** "Crea el scaffolding descrito en la sección 2 del plan. Backend con Express + better-sqlite3 aplicando el schema de la sección 3 al arrancar. Frontend con Vite + TypeScript vanilla. Solo un endpoint `/health`. No implementes todavía lógica de autenticación ni cifrado."
+> **Prompt:** "Crea el scaffolding descrito en la sección 2 del plan. Backend con Express + pg y Supabase aplicando la migración de la sección 3. Frontend con Vite + TypeScript vanilla. Solo un endpoint `/health`. No implementes todavía lógica de autenticación ni cifrado."
 
 ### Fase 1 — Módulo de criptografía del cliente (aislado, sin UI)
 **Tareas:** implementar `kdf.js` (PBKDF2 + HKDF), `vault-key.js` (wrap/unwrap), `cipher.js` (encrypt/decrypt de items). Todo con `crypto.subtle`.
@@ -192,13 +193,13 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 
 ### Fase 7 — Auditoría "Modo Difícil"
 **Tareas:**
-- Script `zero-knowledge-audit.test.js`: hace login/registro/creación de items de prueba con contenido reconocible (ej. `"CONTRASEÑA_DE_PRUEBA_XYZ"`), luego lee la base SQLite directamente con `better-sqlite3` y falla el test si encuentra esa cadena en cualquier columna de cualquier tabla.
+- Script `zero-knowledge-audit.test.js`: hace login/registro/creación de items de prueba con contenido reconocible (ej. `"CONTRASEÑA_DE_PRUEBA_XYZ"`), luego consulta PostgreSQL directamente con `pg` y falla el test si encuentra esa cadena en cualquier columna de cualquier tabla.
 - Instrucciones para correr `mitmproxy` en modo reverse proxy delante del backend, usar la app a través de él, y confirmar visualmente que ningún payload capturado contiene texto plano de contraseñas maestras ni claves.
 - Documentar por escrito la limitación estructural: el servidor sirve el JavaScript que cifra, así que un servidor comprometido podría alterar ese código. Mitigado parcialmente con CSP + Subresource Integrity (SRI) en los bundles.
 
 **Criterio de aceptación:** el test automatizado de la DB pasa; capturas de mitmproxy adjuntas al informe mostrando solo blobs base64 ininteligibles.
 
-> **Prompt:** "Escribe `zero-knowledge-audit.test.js`: crea un usuario y un item de vault con el texto literal 'CONTRASEÑA_DE_PRUEBA_XYZ', luego abre `data/app.db` directamente con better-sqlite3 y falla el test si esa cadena aparece en cualquier fila de cualquier tabla. Además, añade Subresource Integrity a los scripts del build de Vite."
+> **Prompt:** "Escribe `zero-knowledge-audit.test.js`: crea un usuario y un item de vault con el texto literal 'CONTRASEÑA_DE_PRUEBA_XYZ', consulta PostgreSQL con `pg` y falla el test si esa cadena aparece en cualquier fila de cualquier tabla. Además, añade Subresource Integrity a los scripts del build de Vite."
 
 ### Fase 8 — Pulido y documentación
 **Tareas:** README con instrucciones de instalación, diagrama del flujo criptográfico, sección de "amenazas conocidas y no mitigadas" (honestidad técnica).
