@@ -16,3 +16,6 @@ client/.vite/
 # Logs y archivos del sistema
 *.log
 .DS_Store
+
+# Documentacion local (no publicar en GitHub)
+DOCS.md
