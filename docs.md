@@ -1,60 +1,123 @@
-# Documentacion tecnica del proyecto
+# Documentacion tecnica
 
-## 1. Resumen
-Hasta ahora se han completado el scaffolding inicial, la persistencia PostgreSQL en Supabase y el modulo criptografico aislado del cliente.
+## Estado actual
 
-## 2. Estado actual
+Este proyecto es un gestor de contrasenas Zero-Knowledge con arquitectura
+split-key. El cliente React/Vite ejecuta la derivacion y el cifrado; el
+servidor Express solo debe recibir hashes de autenticacion y datos cifrados.
 
-### Implementado
+Completado hasta ahora:
 
-- Backend Node.js + Express.
-- Cliente React + Vite + TypeScript.
-- PostgreSQL gestionado por Supabase mediante el paquete `pg`.
-- Pool de conexiones PostgreSQL con SSL configurable.
-- Migracion SQL idempotente para `users` y `vault_items`.
-- RLS activado para ambas tablas.
-- Endpoint `GET /health`.
-- Comandos `db:check` y `db:migrate`.
-- Criptografia del cliente con Web Crypto API:
-  - PBKDF2-SHA256.
-  - HKDF-SHA256.
-  - AES-GCM de 256 bits.
-  - Envoltura y desenvoltura de `vaultKey`.
-  - Serializacion de items como JSON.
-- Tests Vitest para el modulo criptografico.
-- Pantalla inicial React sin llamadas de red ni persistencia de secretos.
+- Scaffolding de backend Express y cliente React/Vite/TypeScript.
+- Migracion de SQLite a PostgreSQL gestionado por Supabase mediante `pg`.
+- Migracion SQL idempotente en `server/sql/001_initial_schema.sql`.
+- Tablas `users` y `vault_items` con relacion por `user_id`.
+- RLS habilitado en ambas tablas.
+- Endpoint `GET /health` conectado a PostgreSQL.
+- Modulo crypto del cliente con PBKDF2-SHA256, HKDF-SHA256 y AES-GCM-256.
+- Envoltura y desenvoltura de `vaultKey`.
+- Tests Vitest para derivacion, wrap/unwrap y cifrado.
 
-### Pendiente
+## Estructura importante
 
-Las rutas de autenticacion y de la boveda todavia no existen. Esto es intencional: pertenecen a las fases siguientes del plan.
+```text
+server/
+  src/app.js                         # Express, /health y arranque
+  src/db.js                          # Pool PostgreSQL
+  src/migrate.js                     # Comandos de conexion y migracion
+  sql/001_initial_schema.sql         # Schema PostgreSQL y RLS
+  .env.example                       # Variables sin secretos
 
-- Fase 2: registro, consulta de salt, login, Argon2, JWT, cookie httpOnly y rate limiting.
-- Fase 3: formularios de registro/login conectados al modulo crypto.
-- Fase 4: CRUD de la boveda y middleware `requireAuth`.
-- Fase 5: Helmet, CSP estricta, CORS y Zod.
-- Fase 6: vectores oficiales NIST.
-- Fase 7: auditoria Zero-Knowledge, mitmproxy y SRI.
-- Fase 8: documentacion final, diagrama criptografico y amenazas conocidas.
+client/
+  src/crypto/kdf.js                  # PBKDF2, HKDF, base64 y aleatoriedad
+  src/crypto/vault-key.js            # Vault key con AES-GCM
+  src/crypto/cipher.js               # Cifrado de items JSON
+  src/crypto/crypto.test.js          # Tests de crypto
+```
 
-No deben considerarse implementados todavia `POST /api/auth/register`, `GET /api/auth/salt`, `POST /api/auth/login`, `/api/vault` ni logout.
+## Supabase y variables de entorno
 
-## 7. Como continuar
+El secreto real vive en `server/.env` y esta excluido por `.gitignore`.
+Nunca debe subirse al repositorio.
 
-La siguiente fase es la Fase 2. Antes de implementarla hay que conservar estas decisiones:
+```env
+PORT=3000
+DATABASE_URL=postgresql://postgres:TU_PASSWORD@db.TU_PROJECT_REF.supabase.co:5432/postgres
+DB_SSL=true
+DB_SSL_REJECT_UNAUTHORIZED=false
+DB_POOL_MAX=10
+```
 
-1. El cliente deriva `authHash` y prepara `wrappedVaultKey`; el servidor nunca deriva contrasenas.
-2. El servidor recibe y almacena `authHash`, pero debe volver a hashearlo con Argon2 antes de persistirlo.
-3. El registro debe guardar el salt generado por el cliente, las iteraciones, el auth hash procesado, la vault key envuelta y su IV.
-4. El login debe comparar el auth hash con Argon2, emitir JWT en cookie httpOnly y devolver solo `wrappedVaultKey` y `wrapIv`.
-5. Deben añadirse primero tests de rutas y rate limiting antes de conectar la UI.
-6. No guardar secretos en logs, `localStorage`, `sessionStorage` ni respuestas innecesarias.
+`DB_SSL_REJECT_UNAUTHORIZED=false` facilita la conexion inicial. En
+produccion conviene usar el certificado CA de Supabase y mantener la
+verificacion TLS activada.
 
-## 8. Notas para futuras sesiones
+## Comandos
 
-- Leer primero [PLAN.md](PLAN.md) y este archivo.
-- Comprobar `git status` antes de editar: puede haber cambios locales del usuario.
-- No leer ni imprimir el contenido de `server/.env`; solo comprobar que `DATABASE_URL` existe o ejecutar una prueba de conexion.
-- Ejecutar comandos del backend desde `server/`. Ejecutar tests/build del frontend desde `client/`.
-- Si una sesion de terminal persistente hereda otro directorio, usar `cd` con la ruta absoluta del repositorio.
-- La persistencia actual es Supabase PostgreSQL.
-- No modificar `client/src/crypto/` al implementar rutas de autenticacion salvo que un test demuestre una incompatibilidad.
+Backend, desde `server/`:
+
+```bash
+npm install
+npm run db:check
+npm run db:migrate
+npm run dev
+```
+
+El endpoint de comprobacion es:
+
+```bash
+curl http://localhost:3000/health
+```
+
+Respuesta esperada:
+
+```json
+{"status":"ok"}
+```
+
+Cliente, desde `client/`:
+
+```bash
+npm install
+npm test
+npm run build
+npm run dev
+```
+
+## Seguridad implementada
+
+- La aleatoriedad del navegador usa `crypto.getRandomValues`.
+- AES-GCM utiliza IVs de 12 bytes y claves de 256 bits.
+- PBKDF2 usa SHA-256 y 600000 iteraciones por defecto.
+- HKDF separa los contextos `enc` y `auth`.
+- La `vaultKey` no se guarda en `localStorage` ni `sessionStorage`.
+- React no se conecta directamente a Supabase.
+- RLS esta activado para `users` y `vault_items`.
+- No se registran contrasenas maestras ni claves de cifrado.
+
+## Trabajo pendiente
+
+Segun `PLAN.md`, aun falta implementar:
+
+1. Fase 2: registro, consulta de salt, login, Argon2, JWT, cookie httpOnly y rate limiting.
+2. Fase 3: formularios de registro/login conectados al modulo crypto.
+3. Fase 4: CRUD de la boveda y middleware `requireAuth`.
+4. Fase 5: Helmet, CSP, CORS y validacion Zod.
+5. Fase 6: vectores oficiales NIST.
+6. Fase 7: auditoria Zero-Knowledge, mitmproxy y SRI.
+7. Fase 8: documentacion final, diagrama y amenazas conocidas.
+
+Actualmente no existen aun las rutas `/api/auth` ni `/api/vault`. No deben
+implementarse saltandose el orden del plan.
+
+## Continuacion recomendada
+
+La siguiente tarea es la Fase 2. El servidor debe recibir unicamente:
+
+- `email`.
+- `kdfSalt` y `kdfIterations` generados por el cliente.
+- `authHash` derivado por el cliente, que se volvera a hashear con Argon2.
+- `wrappedVaultKey` y `wrapIv`.
+
+La contrasena maestra, la Master Key, la Encryption Key y la `vaultKey` nunca
+deben llegar al servidor ni almacenarse en texto plano.

@@ -1,12 +1,18 @@
+# Dependencias instaladas
 node_modules/
-.agents/
 
+# Configuracion local y secretos
 .env
 .env.*
 !.env.example
 
+# Herramientas y configuracion interna del agente
+.agents/
+
+# Artefactos de compilacion del cliente
 client/dist/
 client/.vite/
 
+# Logs y archivos del sistema
 *.log
 .DS_Store
