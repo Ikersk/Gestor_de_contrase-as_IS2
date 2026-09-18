@@ -1,0 +1,22 @@
+{
+  "name": "password-manager-zk-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-knowledge password manager API server",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "nodemon src/app.js",
+    "start": "node src/app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "11.10.0",
+    "dotenv": "latest",
+    "express": "latest"
+  },
+  "devDependencies": {
+    "nodemon": "latest"
+  }
+}

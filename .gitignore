@@ -1,0 +1,15 @@
+node_modules/
+.agents/skills/
+
+.env
+.env.*
+!.env.example
+
+server/data/*.db
+server/data/*.db-*
+
+client/dist/
+client/.vite/
+
+*.log
+.DS_Store
