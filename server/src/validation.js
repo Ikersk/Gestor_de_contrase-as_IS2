@@ -1,5 +1,6 @@
 const { z } = require('zod');
 
+// Los límites de tamaño impiden payloads abusivos y reflejan el contrato del cliente.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AUTH_HASH_BYTES = 32;
 const KDF_SALT_BYTES = 16;
@@ -8,6 +9,7 @@ const WRAPPED_VAULT_KEY_BYTES = 32 + 16;
 const MAX_CIPHERTEXT_BYTES = 1_048_576;
 const MAX_EMAIL_LENGTH = 254;
 
+/** Acepta únicamente base64 canónico cuyo contenido cabe en el campo correspondiente. */
 function base64String({ minBytes = 0, maxBytes = Number.POSITIVE_INFINITY } = {}) {
   return z.string().refine((value) => {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return false;
@@ -18,6 +20,7 @@ function base64String({ minBytes = 0, maxBytes = Number.POSITIVE_INFINITY } = {}
   }, 'Must be canonical base64 with an allowed byte length');
 }
 
+// Normaliza emails para que registro, consulta de salt y login usen el mismo identificador.
 const email = z.string().trim().toLowerCase().max(MAX_EMAIL_LENGTH).refine(
   (value) => EMAIL_PATTERN.test(value),
   'Must be a valid email',
@@ -45,6 +48,7 @@ const vaultItemSchema = z.object({
   ciphertext: base64String({ minBytes: 16, maxBytes: MAX_CIPHERTEXT_BYTES }),
 });
 
+/** Valida un cuerpo sin propagar detalles internos de Zod a la respuesta HTTP. */
 function parsePayload(schema, body) {
   const result = schema.safeParse(body);
   return result.success ? result.data : null;

@@ -5,12 +5,14 @@ process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
 process.env.JWT_SECRET = 'test-secret-with-at-least-32-characters';
 process.env.COOKIE_SECURE = 'true';
 
+// Dependencias HTTP y de hashing usadas para probar el contrato sin una base real.
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const { createApp } = require('../src/app');
 
 /** Crea un almacenamiento en memoria con la misma interfaz minima que pg.Pool. */
 function makePool() {
+  // Simula las consultas que usan las rutas de autenticacion y conserva sus resultados.
   const users = new Map();
   return {
     users,
@@ -51,6 +53,7 @@ function makePool() {
 
 /** Genera el payload criptografico que el cliente enviaria despues de derivar sus claves. */
 function validRegistration(email = 'alice@example.com') {
+  // Representa el payload ya derivado que enviaria el navegador.
   return {
     email,
     kdfSalt: Buffer.alloc(16, 1).toString('base64'),

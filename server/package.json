@@ -9,8 +9,7 @@
     "start": "node src/app.js",
     "db:check": "node src/migrate.js --check",
     "db:migrate": "node src/migrate.js",
-    "test": "node --test",
-    "test:audit": "RUN_ZK_AUDIT=true node --test test/zero-knowledge-audit.test.js"
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"

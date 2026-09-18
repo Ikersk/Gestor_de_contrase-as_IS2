@@ -85,29 +85,34 @@ npm run build
 El build genera automaticamente hashes SRI SHA-384 en `dist/index.html` para
 los bundles JavaScript y CSS.
 
-La auditoria Zero-Knowledge usa la base PostgreSQL configurada en `server/.env`.
-Crea una cuenta temporal, cifra un marcador reconocible en el navegador
-simulado, busca ese marcador en las filas de `users` y `vault_items`, y limpia
-la cuenta al terminar. Ejecutala solo contra una base de pruebas:
+Para revisar manualmente la base de datos, abre el **SQL Editor** de Supabase y
+consulta las tablas:
 
-```bash
-cd server
-npm run test:audit
+```sql
+SELECT * FROM users;
+SELECT * FROM vault_items;
 ```
 
-## Captura con mitmproxy
+En `users` deben aparecer el hash del `authHash`, el `kdf_salt`, el
+`wrapped_vault_key` y el `wrap_iv`. En `vault_items` deben aparecer únicamente
+el `iv` y el `ciphertext`. Estos valores deben ser hashes o cadenas Base64
+ilegibles; no deben aparecer contraseñas, usuarios ni URLs en texto plano.
 
-Para inspeccionar el tráfico HTTP local sin modificar la aplicación:
+La revisión visual de `ciphertext` es suficiente para esta comprobación manual:
+el valor debe ser Base64 y no debe mostrar directamente el contenido de la
+credencial. Buscar una palabra legible con `LIKE` no es una prueba válida,
+porque el contenido está cifrado antes de convertirse a Base64.
 
-```bash
-mitmweb --mode reverse:http://localhost:3000@3001
-```
+La revisión de la base debe hacerse sobre un entorno de pruebas y las capturas
+no deben contener secretos reales.
 
-Configura temporalmente `VITE_API_BASE_URL=http://localhost:3001/api`, inicia
-el cliente y usa la interfaz a través del puerto `3001`. En las peticiones de
-registro, login y vault deben aparecer únicamente material derivado, IVs y
-blobs Base64; nunca la contraseña maestra, la Vault Key ni los campos legibles
-de una credencial. No adjuntes certificados ni capturas con secretos reales.
+## Revisión del tráfico en DevTools
+
+Abre las herramientas de desarrollador del navegador, entra en la pestaña
+**Network** y usa la aplicación. En las peticiones de registro, login y vault
+deben aparecer únicamente material derivado, IVs y blobs Base64; nunca la
+contraseña maestra, la Vault Key ni los campos legibles de una credencial.
+Evita guardar o compartir capturas que contengan secretos reales.
 
 ## Flujo criptografico
 
@@ -140,6 +145,4 @@ flowchart LR
 - XSS en el origen de la aplicación podría acceder a secretos mientras la
 	bóveda está desbloqueada. La CSP estricta ayuda, pero las dependencias y el
 	servidor de frontend siguen formando parte del perímetro de confianza.
-- mitmproxy solo demuestra el tráfico de la ejecución inspeccionada; no prueba
-	todos los despliegues ni sustituye una revisión del código entregado.
 

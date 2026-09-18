@@ -1,5 +1,3 @@
 {
-  "dependencies": {
-    "mitmproxy": "^2.1.2"
-  }
+  "dependencies": {}
 }

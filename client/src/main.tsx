@@ -6,8 +6,10 @@ import './styles.css';
 import { FIELD_LIMITS } from './validation';
 
 type View = 'login' | 'register';
+// Estado inicial reutilizado al abrir el formulario y al limpiar una credencial.
 const emptyCredential: Credential = { title: '', username: '', password: '', url: '' };
 
+/** Presenta los formularios de registro/login y los mensajes de resultado de la operación. */
 function AuthPanel({ view, setView, email, setEmail, masterPassword, setMasterPassword, busy, message, error, onSubmit }: {
   view: View;
   setView: (view: View) => void;
@@ -41,6 +43,7 @@ function AuthPanel({ view, setView, email, setEmail, masterPassword, setMasterPa
   </section>;
 }
 
+/** Página pública que explica el modelo zero-knowledge y dirige al formulario de acceso. */
 function Landing({ onAccess }: { onAccess: () => void }) {
   return <div className="landing-page">
     <header className="site-header">
@@ -75,6 +78,7 @@ function Landing({ onAccess }: { onAccess: () => void }) {
   </div>;
 }
 
+/** Coordina la navegación, la sesión en memoria y las operaciones CRUD de la bóveda. */
 function App() {
   const [view, setView] = useState<View>('login');
   const [showAccess, setShowAccess] = useState(false);
@@ -89,6 +93,7 @@ function App() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  /** Registra una cuenta o inicia sesión y carga las credenciales tras desbloquear la bóveda. */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(''); setMessage('');
     try {
@@ -98,12 +103,14 @@ function App() {
     } catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'No se pudo completar la operación'); }
     finally { setBusy(false); }
   }
+  /** Cierra la sesión remota y limpia todo el estado sensible de la interfaz. */
   async function handleLogout() {
     setBusy(true); setError('');
     try { await logoutFromMemory(); setMessage('Sesión cerrada.'); }
     catch (logoutError) { setError(logoutError instanceof Error ? logoutError.message : 'No se pudo cerrar la sesión'); }
     finally { setAuthenticated(false); setCredentials([]); setCredential(emptyCredential); setEditingId(null); setRevealedId(null); setBusy(false); }
   }
+  /** Crea o actualiza una credencial; el módulo vault cifra antes de llamar a la API. */
   async function handleCredentialSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
     try {
@@ -113,6 +120,7 @@ function App() {
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : 'No se pudo guardar la credencial'); }
     finally { setBusy(false); }
   }
+  /** Elimina una credencial en el servidor y sincroniza la lista local. */
   async function handleDelete(id: number | string) {
     setBusy(true); setError('');
     try { await removeCredential(id); setCredentials((current) => current.filter((item) => item.id !== id)); if (editingId === id) { setCredential(emptyCredential); setEditingId(null); } setMessage('Credencial eliminada.'); }

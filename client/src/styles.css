@@ -1,4 +1,5 @@
 :root {
+  /* Tokens visuales compartidos por la landing, el acceso y la bóveda. */
   font-family: 'Manrope', 'Segoe UI', sans-serif;
   color: #122a35;
   background: #f3f0e9;
@@ -15,6 +16,7 @@
   --soft-line: rgba(18, 42, 53, 0.09);
 }
 
+/* Normalización mínima para que las dimensiones sean predecibles en todos los controles. */
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--cream); }
@@ -25,6 +27,7 @@ a { color: inherit; }
 h1, h2, h3, p { margin-top: 0; text-wrap: pretty; }
 h1, h2, h3 { letter-spacing: -0.045em; }
 
+/* Estructura pública y navegación principal. */
 .landing-page, .auth-page { width: min(1180px, calc(100% - 6rem)); margin: 0 auto; }
 .site-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 0; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-size: 18px; font-weight: 700; letter-spacing: 0.12em; text-decoration: none; }
@@ -86,6 +89,7 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 .light-button:hover:not(:disabled) { color: var(--paper); background: var(--coral); }
 .site-footer { display: flex; justify-content: space-between; gap: 24px; padding: 24px 0 40px; color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
 
+/* Formularios de autenticación y estados de feedback. */
 .auth-page { min-height: 100vh; }
 .auth-page .site-header { border-bottom: 1px solid var(--line); }
 .back-link { color: var(--muted); }
@@ -106,6 +110,7 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 .feedback.success { color: #27664e; }
 .feedback.error { color: #a13d2d; }
 
+/* Espacio de trabajo de la bóveda y sus controles CRUD. */
 .app-shell { width: min(1180px, calc(100% - 6rem)); margin: 0 auto; }
 .vault-shell { min-height: 100vh; padding: 32px 0 80px; }
 .workspace-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
@@ -139,6 +144,7 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 .empty-glyph { display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: 16px; border: 1px solid var(--coral); border-radius: 50%; color: var(--coral-dark); font-size: 22px; }
 .empty-state p { margin: 0; color: var(--muted); font-size: 14px; line-height: 22px; }
 
+/* Movimiento decorativo de la ilustración; se desactiva para usuarios con movimiento reducido. */
 @keyframes core-pulse { 0%, 100% { box-shadow: 0 20px 40px rgba(18, 42, 53, 0.14); } 50% { box-shadow: 0 24px 52px rgba(18, 42, 53, 0.22); } }
 @keyframes label-orbit { from { offset-distance: 0%; } to { offset-distance: 100%; } }
 @keyframes orbit-line-drift { from { transform: translate(-50%, -50%) rotate(-24deg); } to { transform: translate(-50%, -50%) rotate(336deg); } }

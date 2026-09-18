@@ -2,16 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { encryptBytes } from './cipher.js';
 import { deriveMasterKey } from './kdf.js';
 
+// Convierte representaciones hexadecimales de los vectores de referencia en bytes.
 function hexToBytes(value) {
   return Uint8Array.from(value.match(/.{2}/g).map((byte) => Number.parseInt(byte, 16)));
 }
 
+// Normaliza bytes a hexadecimal para comparar resultados byte a byte.
 function bytesToHex(value) {
   return [...new Uint8Array(value)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
 }
 
+// Los vectores externos detectan implementaciones consistentemente incorrectas.
 describe('known cryptographic vectors', () => {
   it('matches the PBKDF2-HMAC-SHA256 reference output', async () => {
     const derived = await deriveMasterKey('password', new Uint8Array(16), 1);

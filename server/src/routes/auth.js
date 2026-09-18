@@ -16,7 +16,6 @@ function normalizeEmail(value) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
-/** Limita las iteraciones aceptadas para evitar configuraciones invalidas o abusivas. */
 /** Obtiene el secreto del servidor usado para firmar JWT y salts falsos. */
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -65,6 +64,7 @@ function createAuthRouter({ dbPool }) {
     message: { error: 'Too many salt requests. Try again later.' },
   });
 
+  // Valida, rehashea y persiste solo el material derivado que prepara el cliente.
   // POST /register: almacena el Auth Hash rehasheado y los blobs cifrados del cliente.
   router.post('/register', async (request, response, next) => {
     const payload = parsePayload(registerSchema, request.body);
@@ -92,6 +92,7 @@ function createAuthRouter({ dbPool }) {
     }
   });
 
+  // Devuelve siempre una respuesta estructuralmente válida para dificultar la enumeración de usuarios.
   // GET /salt?email=: devuelve el KDF salt real o uno falso si la cuenta no existe.
   router.get('/salt', saltLimiter, async (request, response, next) => {
     const email = normalizeEmail(request.query.email);
@@ -114,6 +115,7 @@ function createAuthRouter({ dbPool }) {
     }
   });
 
+  // Compara incluso contra un hash ficticio para que los emails inexistentes no tengan un camino barato.
   // POST /login: verifica el Auth Hash y devuelve la vault key envuelta junto con la sesion.
   router.post('/login', loginLimiter, async (request, response, next) => {
     const payload = parsePayload(loginSchema, request.body);

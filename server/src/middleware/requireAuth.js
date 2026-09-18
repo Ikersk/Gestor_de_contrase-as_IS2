@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 
 const SESSION_COOKIE = 'session';
 
+// El secreto se exige en runtime para evitar firmar sesiones con una configuración débil.
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 32) {
@@ -15,10 +16,12 @@ function getJwtSecret() {
 /** Rechaza peticiones sin una cookie JWT valida y expone solo el identificador de usuario. */
 function requireAuth(request, response, next) {
   try {
+    // La cookie httpOnly solo se interpreta en el servidor; el cliente nunca lee el JWT.
     const cookies = cookie.parse(request.headers.cookie || '');
     const token = cookies[SESSION_COOKIE];
     if (!token) return response.status(401).json({ error: 'Authentication required' });
 
+    // Limitar el algoritmo evita aceptar tokens firmados con una familia no prevista.
     const payload = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
     if (!payload || typeof payload !== 'object' || typeof payload.sub !== 'string') {
       return response.status(401).json({ error: 'Authentication required' });

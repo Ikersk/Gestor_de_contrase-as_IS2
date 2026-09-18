@@ -18,8 +18,10 @@ export interface VaultItemResponse {
   updatedAt?: string;
 }
 
+// Permite cambiar el origen de la API en despliegues y usa el proxy de Vite por defecto.
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
+/** Ejecuta una petición JSON con cookies de sesión y convierte los errores HTTP en excepciones útiles. */
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...options,

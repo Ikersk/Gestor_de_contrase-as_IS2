@@ -5,11 +5,13 @@ process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
 process.env.JWT_SECRET = 'test-secret-with-at-least-32-characters';
 process.env.COOKIE_SECURE = 'false';
 
+// Estas pruebas ejercitan las rutas privadas sin tocar PostgreSQL.
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const { createApp } = require('../src/app');
 
 function makePool() {
+  // Conserva blobs por usuario para poder verificar el aislamiento del CRUD.
   const items = [];
   return {
     items,
@@ -56,6 +58,7 @@ function makePool() {
 }
 
 function sessionCookie(userId) {
+  // Genera la misma cookie que emitiría el endpoint de login.
   const token = jwt.sign({ sub: userId }, process.env.JWT_SECRET, {
     algorithm: 'HS256',
     expiresIn: '8h',
@@ -64,6 +67,7 @@ function sessionCookie(userId) {
 }
 
 function validItem(fill = 1) {
+  // Crea un blob con tamaños válidos, sin introducir contenido legible.
   return {
     iv: Buffer.alloc(12, fill).toString('base64'),
     ciphertext: Buffer.alloc(16, fill + 1).toString('base64'),

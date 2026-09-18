@@ -6,6 +6,7 @@ import {
   validateMasterPassword,
 } from './validation';
 
+// Las pruebas cubren los límites que también debe respetar el formulario visible.
 describe('form validation limits', () => {
   it('requires a valid email within the protocol limit', () => {
     expect(validateEmail('not-an-email')).toBeTruthy();

@@ -1,3 +1,4 @@
+// Mantiene los límites de la interfaz alineados con el tamaño esperado por el protocolo.
 export const FIELD_LIMITS = {
   email: 40,
   masterPassword: 42,
@@ -7,6 +8,7 @@ export const FIELD_LIMITS = {
   url: 100,
 } as const;
 
+// Comprueba una forma básica de correo sin intentar implementar toda la especificación RFC.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface ValidatableCredential {
@@ -16,6 +18,7 @@ export interface ValidatableCredential {
   url: string;
 }
 
+/** Valida campos obligatorios y, cuando procede, evita valores compuestos solo por símbolos. */
 function requiredText(value: string, label: string, maxLength: number, requireLetter = false) {
   if (!value.trim()) return `${label} es obligatorio`;
   if (value.length > maxLength) return `${label} no puede superar ${maxLength} caracteres`;
@@ -23,6 +26,7 @@ function requiredText(value: string, label: string, maxLength: number, requireLe
   return null;
 }
 
+/** Valida el correo antes de iniciar cualquier operación criptográfica o de red. */
 export function validateEmail(value: string) {
   const email = value.trim();
   if (!email) return 'El correo electronico es obligatorio';
@@ -31,6 +35,7 @@ export function validateEmail(value: string) {
   return null;
 }
 
+/** Aplica la longitud mínima y máxima de la contraseña maestra sin inspeccionar su contenido. */
 export function validateMasterPassword(value: string) {
   if (!value) return 'La contrasena maestra es obligatoria';
   if (value.length < 12) return 'La contrasena maestra debe tener al menos 12 caracteres';
@@ -38,6 +43,7 @@ export function validateMasterPassword(value: string) {
   return null;
 }
 
+/** Valida los campos legibles de una credencial antes de cifrarlos y guardarlos. */
 export function validateCredential(credential: ValidatableCredential) {
   const checks = [
     requiredText(credential.title, 'El nombre', FIELD_LIMITS.title, true),
