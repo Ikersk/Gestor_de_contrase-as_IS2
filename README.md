@@ -113,36 +113,3 @@ Abre las herramientas de desarrollador del navegador, entra en la pestaña
 deben aparecer únicamente material derivado, IVs y blobs Base64; nunca la
 contraseña maestra, la Vault Key ni los campos legibles de una credencial.
 Evita guardar o compartir capturas que contengan secretos reales.
-
-## Flujo criptografico
-
-```mermaid
-flowchart LR
-	P[Contrasena maestra] --> K[PBKDF2-SHA256]
-	S[Salt del cliente] --> K
-	K --> M[Master Key]
-	M --> H[HKDF info auth]
-	M --> E[HKDF info enc]
-	H --> A[Auth Hash]
-	E --> W[AES-GCM envuelve Vault Key]
-	A --> R[Servidor: bcrypt + JWT]
-	W --> R
-	V[Credencial legible] --> C[AES-GCM con Vault Key]
-	C --> B[IV + ciphertext Base64]
-	B --> R
-```
-
-## Amenazas conocidas
-
-- Un servidor comprometido podría entregar JavaScript modificado antes de que
-	el navegador cifre una credencial. CSP y SRI reducen cambios accidentales o
-	recursos externos, pero no sustituyen servir el cliente desde un canal y una
-	cadena de despliegue confiables.
-- El servidor puede observar metadatos como email, tamaños aproximados,
-	timestamps y frecuencia de acceso, aunque no descifre los blobs.
-- La pérdida de la contraseña maestra implica la pérdida de la capacidad de
-	desenvolver la Vault Key; no existe recuperación por diseño zero-knowledge.
-- XSS en el origen de la aplicación podría acceder a secretos mientras la
-	bóveda está desbloqueada. La CSP estricta ayuda, pero las dependencias y el
-	servidor de frontend siguen formando parte del perímetro de confianza.
-
