@@ -34,7 +34,3 @@ npm run dev
 
 Vite mostrara la URL local del cliente, normalmente `http://localhost:5173`.
 
-## Fase actual
-
-La Fase 0 solo contiene el scaffolding, el endpoint `/health` y la creacion
-del esquema SQLite. No hay autenticacion, cifrado ni rutas de la boveda.
