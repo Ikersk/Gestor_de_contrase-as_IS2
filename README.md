@@ -32,7 +32,17 @@ Ejemplo de configuracion:
 DATABASE_URL=postgresql://postgres:TU_PASSWORD@db.TU_PROJECT_REF.supabase.co:5432/postgres
 DB_SSL=true
 DB_SSL_REJECT_UNAUTHORIZED=false
+JWT_SECRET=una-clave-aleatoria-de-al-menos-32-caracteres
+COOKIE_SECURE=false
 ```
+
+En desarrollo sobre `http://localhost`, `COOKIE_SECURE=false` permite que el
+navegador envie la cookie de sesion. En produccion debe mantenerse en `true`.
+
+El cliente deriva las claves localmente durante el registro y el login. La
+contrasena maestra nunca se envia al backend ni se guarda en `localStorage` o
+`sessionStorage`; la `vaultKey` solo vive en memoria mientras la sesion esta
+abierta.
 
 ## Cliente
 

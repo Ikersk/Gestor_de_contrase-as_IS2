@@ -8,17 +8,23 @@
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",
     "db:check": "node src/migrate.js --check",
-    "db:migrate": "node src/migrate.js"
+    "db:migrate": "node src/migrate.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "bcryptjs": "latest",
+    "cookie": "latest",
     "dotenv": "latest",
     "express": "latest",
+    "express-rate-limit": "latest",
+    "jsonwebtoken": "latest",
     "pg": "latest"
   },
   "devDependencies": {
-    "nodemon": "latest"
+    "nodemon": "latest",
+    "supertest": "latest"
   }
 }

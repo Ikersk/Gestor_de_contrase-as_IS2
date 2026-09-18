@@ -1,3 +1,4 @@
+-- Esquema persistente: solo almacena identidad, metadatos KDF y blobs cifrados.
 CREATE TABLE IF NOT EXISTS users (
   id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   email             TEXT NOT NULL UNIQUE,
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS vault_items (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Acelera la carga de los items pertenecientes a una cuenta.
 CREATE INDEX IF NOT EXISTS vault_items_user_id_idx
   ON vault_items (user_id);
 

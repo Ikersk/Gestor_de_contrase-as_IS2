@@ -1,19 +1,23 @@
+// Derivacion de claves en el navegador; la contrasena maestra nunca sale de este modulo.
 const textEncoder = new TextEncoder();
 
 export const DEFAULT_KDF_ITERATIONS = 600_000;
 export const KDF_SALT_BYTES = 16;
 export const AES_KEY_BYTES = 32;
 
+/** Convierte vistas de bytes compatibles en Uint8Array para las APIs Web Crypto. */
 function asBytes(value) {
   return value instanceof Uint8Array ? value : new Uint8Array(value);
 }
 
+/** Rechaza material criptografico con un tamano distinto al protocolo definido. */
 function assertByteLength(value, expectedLength, label) {
   if (asBytes(value).byteLength !== expectedLength) {
     throw new Error(`${label} must be exactly ${expectedLength} bytes`);
   }
 }
 
+/** Genera bytes aleatorios criptograficamente seguros para salts, claves e IVs. */
 export function randomBytes(length) {
   if (!Number.isInteger(length) || length <= 0) {
     throw new Error('Random byte length must be a positive integer');
@@ -22,6 +26,7 @@ export function randomBytes(length) {
   return crypto.getRandomValues(new Uint8Array(length));
 }
 
+/** Serializa bytes a base64 para transportarlos en JSON hacia el backend. */
 export function bytesToBase64(value) {
   const bytes = asBytes(value);
   let binary = '';
@@ -33,6 +38,7 @@ export function bytesToBase64(value) {
   return btoa(binary);
 }
 
+/** Decodifica base64 recibido del backend y rechaza valores que no sean texto valido. */
 export function base64ToBytes(value) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error('Base64 value must be a non-empty string');
@@ -48,6 +54,7 @@ export function base64ToBytes(value) {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
+/** Deriva la Master Key con PBKDF2-SHA256 a partir de la contrasena y el salt del usuario. */
 export async function deriveMasterKey(
   password,
   salt,
@@ -83,6 +90,7 @@ export async function deriveMasterKey(
   );
 }
 
+/** Separa la Master Key en una clave AES y material independiente para el Auth Hash. */
 export async function deriveSubkeys(masterKey) {
   assertByteLength(masterKey, AES_KEY_BYTES, 'Master key');
 
