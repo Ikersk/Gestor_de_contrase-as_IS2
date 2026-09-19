@@ -14,8 +14,9 @@ function getJwtSecret() {
 }
 
 /** Rechaza peticiones sin una cookie JWT valida y expone solo el identificador de usuario. */
-function requireAuth(request, response, next) {
-  try {
+function requireAuth({ dbPool }) {
+  return async function authenticatedRequest(request, response, next) {
+    try {
     // La cookie httpOnly solo se interpreta en el servidor; el cliente nunca lee el JWT.
     const cookies = cookie.parse(request.headers.cookie || '');
     const token = cookies[SESSION_COOKIE];
@@ -23,14 +24,24 @@ function requireAuth(request, response, next) {
 
     // Limitar el algoritmo evita aceptar tokens firmados con una familia no prevista.
     const payload = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
-    if (!payload || typeof payload !== 'object' || typeof payload.sub !== 'string') {
+    if (!payload || typeof payload !== 'object' || typeof payload.sub !== 'string'
+      || !Number.isInteger(payload.sv) || payload.sv < 0) {
+      return response.status(401).json({ error: 'Authentication required' });
+    }
+
+    const result = await dbPool.query(
+      'SELECT session_version FROM users WHERE id = $1',
+      [payload.sub],
+    );
+    if (!result.rows[0] || result.rows[0].session_version !== payload.sv) {
       return response.status(401).json({ error: 'Authentication required' });
     }
 
     request.user = { id: payload.sub };
     return next();
-  } catch (error) {
-    return response.status(401).json({ error: 'Authentication required' });
+    } catch (error) {
+      return response.status(401).json({ error: 'Authentication required' });
+    }
   }
 }
 

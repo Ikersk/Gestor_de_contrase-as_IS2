@@ -1,6 +1,6 @@
 import { FormEvent, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { loginWithMasterPassword, logoutFromMemory, registerWithMasterPassword } from './auth';
+import { changeMasterPassword, loginWithMasterPassword, logoutFromMemory, registerWithMasterPassword } from './auth';
 import { Credential, createCredential, listCredentials, removeCredential, updateCredential } from './vault';
 import './styles.css';
 import { FIELD_LIMITS } from './validation';
@@ -8,6 +8,24 @@ import { FIELD_LIMITS } from './validation';
 type View = 'login' | 'register';
 // Estado inicial reutilizado al abrir el formulario y al limpiar una credencial.
 const emptyCredential: Credential = { title: '', username: '', password: '', url: '' };
+
+function ChangePasswordPanel({ busy, onSubmit }: {
+  busy: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return <section className="account-panel" aria-labelledby="change-password-title">
+    <div className="section-heading"><h2 id="change-password-title">Cambiar contraseña maestra</h2></div>
+    <form className="credential-form" onSubmit={onSubmit}>
+      <label htmlFor="current-master-password">Contraseña actual</label>
+      <input id="current-master-password" name="currentPassword" type="password" autoComplete="current-password" minLength={12} maxLength={FIELD_LIMITS.masterPassword} required />
+      <label htmlFor="new-master-password">Nueva contraseña</label>
+      <input id="new-master-password" name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={FIELD_LIMITS.masterPassword} required />
+      <label htmlFor="confirm-master-password">Confirmar nueva contraseña</label>
+      <input id="confirm-master-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={FIELD_LIMITS.masterPassword} required />
+      <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Actualizando...' : 'Cambiar contraseña'}</button>
+    </form>
+  </section>;
+}
 
 /** Presenta los formularios de registro/login y los mensajes de resultado de la operación. */
 function AuthPanel({ view, setView, email, setEmail, masterPassword, setMasterPassword, busy, message, error, onSubmit }: {
@@ -110,6 +128,24 @@ function App() {
     catch (logoutError) { setError(logoutError instanceof Error ? logoutError.message : 'No se pudo cerrar la sesión'); }
     finally { setAuthenticated(false); setCredentials([]); setCredential(emptyCredential); setEditingId(null); setRevealedId(null); setBusy(false); }
   }
+  /** Cambia la contraseña localmente y obliga a iniciar una sesión nueva. */
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('');
+    const form = new FormData(event.currentTarget);
+    const currentPassword = String(form.get('currentPassword') || '');
+    const newPassword = String(form.get('newPassword') || '');
+    const confirmPassword = String(form.get('confirmPassword') || '');
+    try {
+      if (newPassword !== confirmPassword) throw new Error('Las nuevas contraseñas no coinciden');
+      await changeMasterPassword(currentPassword, newPassword);
+      setAuthenticated(false); setCredentials([]); setCredential(emptyCredential);
+      setEditingId(null); setRevealedId(null); setView('login'); setShowAccess(true);
+      setMessage('Contraseña actualizada. Inicia sesión de nuevo.');
+      event.currentTarget.reset();
+    } catch (changeError) {
+      setError(changeError instanceof Error ? changeError.message : 'No se pudo cambiar la contraseña');
+    } finally { setBusy(false); }
+  }
   /** Crea o actualiza una credencial; el módulo vault cifra antes de llamar a la API. */
   async function handleCredentialSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
@@ -131,7 +167,7 @@ function App() {
   if (!authenticated && !showAccess) return <Landing onAccess={() => { setShowAccess(true); setView('register'); }} />;
   if (!authenticated) return <main className="auth-page"><header className="site-header"><a className="brand" href="/" aria-label="Arca, inicio"><span className="brand-symbol">A</span><span>arca</span></a><button className="back-link" type="button" onClick={() => setShowAccess(false)}>Volver al inicio</button></header><AuthPanel view={view} setView={(nextView) => { setView(nextView); setError(''); setMessage(''); }} email={email} setEmail={setEmail} masterPassword={masterPassword} setMasterPassword={setMasterPassword} busy={busy} message={message} error={error} onSubmit={handleSubmit} /></main>;
 
-  return <main className="app-shell vault-shell"><header className="workspace-header"><a className="brand" href="/" aria-label="Arca, inicio"><span className="brand-symbol">A</span><span>arca</span></a><button className="text-button" type="button" onClick={handleLogout} disabled={busy}>{busy ? 'Cerrando...' : 'Cerrar sesión'}</button></header><section className="workspace-intro" aria-labelledby="vault-title"><h1 id="vault-title">Bóveda desbloqueada.</h1></section><div className="vault-layout"><section className="vault-composer" aria-labelledby="composer-title"><div className="section-heading"><h2 id="composer-title">{editingId === null ? 'Guardar un acceso' : 'Actualizar acceso'}</h2></div><form className="credential-form" onSubmit={handleCredentialSubmit}><label htmlFor="credential-title">Nombre</label><input id="credential-title" maxLength={FIELD_LIMITS.title} placeholder="Ej. GitHub" value={credential.title} onChange={(event) => setCredential({ ...credential, title: event.target.value })} required /><label htmlFor="credential-username">Usuario</label><input id="credential-username" maxLength={FIELD_LIMITS.username} autoComplete="off" placeholder="Tu nombre de usuario" value={credential.username} onChange={(event) => setCredential({ ...credential, username: event.target.value })} required /><label htmlFor="credential-password">Contraseña</label><input id="credential-password" maxLength={FIELD_LIMITS.password} type="password" autoComplete="new-password" placeholder="Contraseña del acceso" value={credential.password} onChange={(event) => setCredential({ ...credential, password: event.target.value })} required /><label htmlFor="credential-url">URL <span>Opcional</span></label><input id="credential-url" maxLength={FIELD_LIMITS.url} type="url" autoComplete="off" placeholder="https://" value={credential.url} onChange={(event) => setCredential({ ...credential, url: event.target.value })} /><div className="form-actions"><button className="primary-button" type="submit" disabled={busy}>{editingId === null ? 'Guardar acceso' : 'Guardar cambios'}</button>{editingId !== null && <button className="secondary-button" type="button" onClick={() => { setEditingId(null); setCredential(emptyCredential); }}>Cancelar</button>}</div></form></section><section className="credential-list" aria-live="polite" aria-labelledby="list-title"><div className="section-heading list-heading"><h2 id="list-title">{credentials.length === 0 ? 'Tu bóveda empieza aquí' : 'Accesos guardados'}</h2></div>{credentials.length === 0 && <div className="empty-state"><div className="empty-glyph">+</div><p>Añade tu primer acceso para tenerlo disponible cuando lo necesites, sin exponerlo al servidor.</p></div>}{credentials.map((item) => <article className="credential-item" key={item.id}><div className="credential-avatar">{item.title.charAt(0).toUpperCase()}</div><div className="credential-details"><h3>{item.title}</h3><p>{item.username}</p>{item.url && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}<input className="password-preview" type={revealedId === item.id ? 'text' : 'password'} value={item.password} readOnly aria-label={`Contraseña de ${item.title}`} /></div><div className="item-actions"><button type="button" onClick={() => setRevealedId(revealedId === item.id ? null : item.id)}>{revealedId === item.id ? 'Ocultar' : 'Mostrar'}</button><button type="button" onClick={() => { setEditingId(item.id); setCredential(item); }}>Editar</button><button type="button" onClick={() => handleDelete(item.id)} disabled={busy}>Borrar</button></div></article>)}</section></div>{message && <p className="feedback success" role="status">{message}</p>}{error && <p className="feedback error" role="alert">{error}</p>}</main>;
+  return <main className="app-shell vault-shell"><header className="workspace-header"><a className="brand" href="/" aria-label="Arca, inicio"><span className="brand-symbol">A</span><span>arca</span></a><button className="text-button" type="button" onClick={handleLogout} disabled={busy}>{busy ? 'Cerrando...' : 'Cerrar sesión'}</button></header><section className="workspace-intro" aria-labelledby="vault-title"><h1 id="vault-title">Bóveda desbloqueada.</h1></section><ChangePasswordPanel busy={busy} onSubmit={handleChangePassword} /><div className="vault-layout"><section className="vault-composer" aria-labelledby="composer-title"><div className="section-heading"><h2 id="composer-title">{editingId === null ? 'Guardar un acceso' : 'Actualizar acceso'}</h2></div><form className="credential-form" onSubmit={handleCredentialSubmit}><label htmlFor="credential-title">Nombre</label><input id="credential-title" maxLength={FIELD_LIMITS.title} placeholder="Ej. GitHub" value={credential.title} onChange={(event) => setCredential({ ...credential, title: event.target.value })} required /><label htmlFor="credential-username">Usuario</label><input id="credential-username" maxLength={FIELD_LIMITS.username} autoComplete="off" placeholder="Tu nombre de usuario" value={credential.username} onChange={(event) => setCredential({ ...credential, username: event.target.value })} required /><label htmlFor="credential-password">Contraseña</label><input id="credential-password" maxLength={FIELD_LIMITS.password} type="password" autoComplete="new-password" placeholder="Contraseña del acceso" value={credential.password} onChange={(event) => setCredential({ ...credential, password: event.target.value })} required /><label htmlFor="credential-url">URL <span>Opcional</span></label><input id="credential-url" maxLength={FIELD_LIMITS.url} type="url" autoComplete="off" placeholder="https://" value={credential.url} onChange={(event) => setCredential({ ...credential, url: event.target.value })} /><div className="form-actions"><button className="primary-button" type="submit" disabled={busy}>{editingId === null ? 'Guardar acceso' : 'Guardar cambios'}</button>{editingId !== null && <button className="secondary-button" type="button" onClick={() => { setEditingId(null); setCredential(emptyCredential); }}>Cancelar</button>}</div></form></section><section className="credential-list" aria-live="polite" aria-labelledby="list-title"><div className="section-heading list-heading"><h2 id="list-title">{credentials.length === 0 ? 'Tu bóveda empieza aquí' : 'Accesos guardados'}</h2></div>{credentials.length === 0 && <div className="empty-state"><div className="empty-glyph">+</div><p>Añade tu primer acceso para tenerlo disponible cuando lo necesites, sin exponerlo al servidor.</p></div>}{credentials.map((item) => <article className="credential-item" key={item.id}><div className="credential-avatar">{item.title.charAt(0).toUpperCase()}</div><div className="credential-details"><h3>{item.title}</h3><p>{item.username}</p>{item.url && <a href={item.url} target="_blank" rel="noreferrer">{item.url}</a>}<input className="password-preview" type={revealedId === item.id ? 'text' : 'password'} value={item.password} readOnly aria-label={`Contraseña de ${item.title}`} /></div><div className="item-actions"><button type="button" onClick={() => setRevealedId(revealedId === item.id ? null : item.id)}>{revealedId === item.id ? 'Ocultar' : 'Mostrar'}</button><button type="button" onClick={() => { setEditingId(item.id); setCredential(item); }}>Editar</button><button type="button" onClick={() => handleDelete(item.id)} disabled={busy}>Borrar</button></div></article>)}</section></div>{message && <p className="feedback success" role="status">{message}</p>}{error && <p className="feedback error" role="alert">{error}</p>}</main>;
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

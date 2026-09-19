@@ -15,7 +15,13 @@ function makePool() {
   const items = [];
   return {
     items,
+    users: new Map([['1', { session_version: 0 }], ['2', { session_version: 0 }]]),
     async query(sql, params) {
+      if (sql.startsWith('SELECT session_version FROM users')) {
+        const user = this.users.get(params[0]);
+        return { rows: user ? [user] : [] };
+      }
+
       if (sql.includes('SELECT id, iv, ciphertext')) {
         return {
           rows: items.filter((item) => item.user_id === params[0]),
@@ -59,7 +65,7 @@ function makePool() {
 
 function sessionCookie(userId) {
   // Genera la misma cookie que emitiría el endpoint de login.
-  const token = jwt.sign({ sub: userId }, process.env.JWT_SECRET, {
+  const token = jwt.sign({ sub: userId, sv: 0 }, process.env.JWT_SECRET, {
     algorithm: 'HS256',
     expiresIn: '8h',
   });

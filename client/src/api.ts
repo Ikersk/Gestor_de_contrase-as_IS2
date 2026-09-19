@@ -76,6 +76,21 @@ export function loginAccount(payload: { email: string; authHash: string }) {
   });
 }
 
+/** Cambia el material de acceso usando solo derivados y la Vault Key ya envuelta. */
+export function changeMasterPasswordRequest(payload: {
+  currentAuthHash: string;
+  kdfSalt: string;
+  kdfIterations: number;
+  authHash: string;
+  wrappedVaultKey: string;
+  wrapIv: string;
+}) {
+  return request<void>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Solicita el borrado de la cookie de sesion del navegador. */
 export function logoutAccount() {
   return request<void>('/auth/logout', { method: 'POST' });

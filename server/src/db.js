@@ -27,11 +27,16 @@ async function checkDatabaseConnection() {
   await pool.query('SELECT 1');
 }
 
-/** Lee y ejecuta la migracion SQL idempotente del proyecto. */
+/** Lee y ejecuta las migraciones SQL idempotentes del proyecto en orden. */
 async function initializeDatabase() {
-  const schemaPath = path.resolve(__dirname, '../sql/001_initial_schema.sql');
-  const schema = await fs.readFile(schemaPath, 'utf8');
-  await pool.query(schema);
+  const sqlDirectory = path.resolve(__dirname, '../sql');
+  const migrationFiles = (await fs.readdir(sqlDirectory))
+    .filter((file) => /^\d+_.+\.sql$/.test(file))
+    .sort();
+  for (const migrationFile of migrationFiles) {
+    const migration = await fs.readFile(path.join(sqlDirectory, migrationFile), 'utf8');
+    await pool.query(migration);
+  }
 }
 
 /** Cierra el pool para liberar conexiones durante el apagado del proceso. */

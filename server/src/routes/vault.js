@@ -10,7 +10,7 @@ function parseItemId(value) {
 /** Crea las rutas privadas de vault usando el userId verificado por requireAuth. */
 function createVaultRouter({ dbPool }) {
   const router = express.Router();
-  router.use(requireAuth);
+  router.use(requireAuth({ dbPool }));
 
   // GET /api/vault: devuelve solo blobs cifrados pertenecientes al usuario de la sesion.
   router.get('/', async (request, response, next) => {

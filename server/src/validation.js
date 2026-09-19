@@ -43,6 +43,18 @@ const loginSchema = z.object({
   authHash: base64String({ minBytes: AUTH_HASH_BYTES, maxBytes: AUTH_HASH_BYTES }),
 });
 
+const changeMasterPasswordSchema = z.object({
+  currentAuthHash: base64String({ minBytes: AUTH_HASH_BYTES, maxBytes: AUTH_HASH_BYTES }),
+  kdfSalt: base64String({ minBytes: KDF_SALT_BYTES, maxBytes: KDF_SALT_BYTES }),
+  kdfIterations: z.number().int().min(100_000).max(2_000_000),
+  authHash: base64String({ minBytes: AUTH_HASH_BYTES, maxBytes: AUTH_HASH_BYTES }),
+  wrappedVaultKey: base64String({
+    minBytes: WRAPPED_VAULT_KEY_BYTES,
+    maxBytes: WRAPPED_VAULT_KEY_BYTES,
+  }),
+  wrapIv: base64String({ minBytes: WRAP_IV_BYTES, maxBytes: WRAP_IV_BYTES }),
+});
+
 const vaultItemSchema = z.object({
   iv: base64String({ minBytes: WRAP_IV_BYTES, maxBytes: WRAP_IV_BYTES }),
   ciphertext: base64String({ minBytes: 16, maxBytes: MAX_CIPHERTEXT_BYTES }),
@@ -58,5 +70,6 @@ module.exports = {
   parsePayload,
   registerSchema,
   loginSchema,
+  changeMasterPasswordSchema,
   vaultItemSchema,
 };

@@ -5,7 +5,12 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
-const { loginSchema, parsePayload, registerSchema } = require('../validation');
+const {
+  changeMasterPasswordSchema,
+  loginSchema,
+  parsePayload,
+  registerSchema,
+} = require('../validation');
 
 const SALT_BYTES = 16;
 const JWT_COOKIE_NAME = 'session';
@@ -34,6 +39,21 @@ function getSessionCookieOptions() {
     maxAge: 8 * 60 * 60 * 1000,
     path: '/',
   };
+}
+
+async function withTransaction(dbPool, operation) {
+  const client = await dbPool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await operation(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /** Genera un salt determinista para ocultar si un email existe en la base de datos. */
@@ -126,7 +146,7 @@ function createAuthRouter({ dbPool }) {
     const email = payload.email;
     try {
       const result = await dbPool.query(
-        `SELECT id, auth_hash_hashed, wrapped_vault_key, wrap_iv
+        `SELECT id, auth_hash_hashed, wrapped_vault_key, wrap_iv, session_version
          FROM users WHERE email = $1`,
         [email],
       );
@@ -139,7 +159,7 @@ function createAuthRouter({ dbPool }) {
         return response.status(401).json({ error: 'Invalid credentials' });
       }
 
-      const token = jwt.sign({ sub: String(user.id) }, getJwtSecret(), {
+      const token = jwt.sign({ sub: String(user.id), sv: user.session_version }, getJwtSecret(), {
         algorithm: 'HS256',
         expiresIn: '8h',
       });
@@ -150,8 +170,56 @@ function createAuthRouter({ dbPool }) {
     }
   });
 
+  const changePasswordLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many password change attempts. Try again later.' },
+  });
+
+  // Cambia los derivados y el envoltorio de la misma Vault Key dentro de una transaccion.
+  router.post('/change-password', changePasswordLimiter, requireAuth({ dbPool }), async (request, response, next) => {
+    const payload = parsePayload(changeMasterPasswordSchema, request.body);
+    if (!payload) {
+      return response.status(400).json({ error: 'Invalid password change payload' });
+    }
+
+    try {
+      await withTransaction(dbPool, async (client) => {
+        const result = await client.query(
+          'SELECT auth_hash_hashed FROM users WHERE id = $1 FOR UPDATE',
+          [request.user.id],
+        );
+        const user = result.rows[0];
+        const valid = user && await bcrypt.compare(payload.currentAuthHash, user.auth_hash_hashed);
+        if (!valid) {
+          const error = new Error('Invalid current credentials');
+          error.statusCode = 401;
+          throw error;
+        }
+
+        const newAuthHashHashed = await bcrypt.hash(payload.authHash, 12);
+        await client.query(
+          `UPDATE users
+           SET kdf_salt = $1, kdf_iterations = $2, auth_hash_hashed = $3,
+               wrapped_vault_key = $4, wrap_iv = $5, session_version = session_version + 1
+           WHERE id = $6`,
+          [payload.kdfSalt, payload.kdfIterations, newAuthHashHashed,
+            payload.wrappedVaultKey, payload.wrapIv, request.user.id],
+        );
+      });
+
+      response.clearCookie(JWT_COOKIE_NAME, getSessionCookieOptions());
+      return response.sendStatus(204);
+    } catch (error) {
+      if (error.statusCode === 401) return response.status(401).json({ error: 'Invalid credentials' });
+      return next(error);
+    }
+  });
+
   // POST /logout: invalida la cookie en el navegador; la proteccion de la ruta llegara con requireAuth.
-  router.post('/logout', requireAuth, (_request, response) => {
+  router.post('/logout', requireAuth({ dbPool }), (_request, response) => {
     response.clearCookie(JWT_COOKIE_NAME, getSessionCookieOptions());
     response.sendStatus(204);
   });

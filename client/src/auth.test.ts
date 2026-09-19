@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  changeMasterPassword,
   getVaultKey,
   loginWithMasterPassword,
   logoutFromMemory,
@@ -66,6 +67,44 @@ describe('client authentication flow', () => {
     expect(getVaultKey()).toEqual(vaultKey);
 
     await logoutFromMemory();
+    expect(getVaultKey()).toBeNull();
+  });
+
+  it('rotates derived material without sending either master password', async () => {
+    const masterKey = await deriveMasterKey(masterPassword, salt, DEFAULT_KDF_ITERATIONS);
+    const { encryptionKey, authHash } = await deriveSubkeys(masterKey);
+    const wrapped = await wrapVaultKey(encryptionKey, vaultKey, new Uint8Array(12).fill(4));
+    let changeBody: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.includes('/auth/salt')) {
+        return new Response(JSON.stringify({
+          kdfSalt: bytesToBase64(salt),
+          kdfIterations: DEFAULT_KDF_ITERATIONS,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (input.includes('/auth/login')) {
+        return new Response(JSON.stringify(wrapped), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (input.includes('/auth/change-password')) {
+        changeBody = JSON.parse(String(init?.body));
+        return new Response(null, { status: 204 });
+      }
+      return new Response(null, { status: 204 });
+    }));
+
+    await loginWithMasterPassword(email, masterPassword);
+    await changeMasterPassword(masterPassword, 'new correct password');
+
+    expect(changeBody).toMatchObject({
+      currentAuthHash: authHash,
+      kdfIterations: DEFAULT_KDF_ITERATIONS,
+    });
+    expect(changeBody).not.toHaveProperty('currentPassword');
+    expect(changeBody).not.toHaveProperty('newPassword');
+    expect(changeBody?.wrappedVaultKey).toEqual(expect.any(String));
     expect(getVaultKey()).toBeNull();
   });
 });

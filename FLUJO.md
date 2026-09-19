@@ -198,6 +198,19 @@ Si la contrasena es incorrecta, la autenticacion falla o AES-GCM no puede valida
 
 ## 5. Guardar una credencial
 
+## 5.1 Cambio de contraseña maestra
+
+El cambio se realiza sin enviar ninguna contraseña al servidor y sin modificar los ciphertexts existentes:
+
+1. El cliente deriva el `currentAuthHash` con el salt y las iteraciones actuales.
+2. Genera un salt nuevo y deriva el nuevo `authHash` y la nueva `Encryption Key`.
+3. Envuelve la misma `Vault Key` con la nueva `Encryption Key` y un IV nuevo.
+4. Envía únicamente derivados, metadatos KDF y blobs Base64 a `POST /api/auth/change-password`.
+5. El servidor verifica el material actual, actualiza todo dentro de una transacción e incrementa `session_version`.
+6. Se invalida la cookie actual y todas las sesiones anteriores; el usuario debe iniciar sesión de nuevo.
+
+La `Vault Key` no cambia, por lo que los items guardados siguen siendo descifrables tras el nuevo login.
+
 El usuario introduce:
 
 ```json

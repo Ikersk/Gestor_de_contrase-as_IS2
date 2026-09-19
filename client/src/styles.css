@@ -119,6 +119,8 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 .workspace-intro h1 { margin-bottom: 16px; color: var(--ink); font-size: clamp(48px, 6vw, 76px); line-height: 1; }
 .summary { max-width: 500px; margin: 0; color: var(--muted); font-size: 16px; line-height: 26px; }
 .vault-layout { display: grid; grid-template-columns: minmax(280px, 0.7fr) minmax(0, 1.3fr); gap: 64px; align-items: start; }
+.account-panel { max-width: 480px; margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--line); }
+.account-panel .credential-form { max-width: 360px; }
 .vault-composer { padding: 28px; border: 1px solid var(--line); background: var(--paper); }
 .section-heading { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 28px; }
 .section-heading h2 { margin: 0; color: var(--ink); font-size: 24px; line-height: 32px; }

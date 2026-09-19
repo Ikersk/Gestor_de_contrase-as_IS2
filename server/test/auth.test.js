@@ -7,6 +7,7 @@ process.env.COOKIE_SECURE = 'true';
 
 // Dependencias HTTP y de hashing usadas para probar el contrato sin una base real.
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { createApp } = require('../src/app');
 
@@ -17,6 +18,11 @@ function makePool() {
   return {
     users,
     async query(sql, params) {
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return { rows: [] };
+      if (sql.startsWith('SELECT session_version FROM users')) {
+        const user = [...users.values()].find((candidate) => String(candidate.id) === params[0]);
+        return { rows: user ? [user] : [] };
+      }
       if (sql.startsWith('INSERT INTO users')) {
         const [email, kdfSalt, kdfIterations, authHashHashed, wrappedVaultKey, wrapIv] = params;
         if (users.has(email)) {
@@ -32,8 +38,21 @@ function makePool() {
           auth_hash_hashed: authHashHashed,
           wrapped_vault_key: wrappedVaultKey,
           wrap_iv: wrapIv,
+          session_version: 0,
         });
         return { rowCount: 1, rows: [] };
+      }
+
+      if (sql.trim().startsWith('UPDATE users')) {
+        const user = [...users.values()].find((candidate) => String(candidate.id) === params[5]);
+        if (!user) return { rowCount: 0 };
+        user.kdf_salt = params[0];
+        user.kdf_iterations = params[1];
+        user.auth_hash_hashed = params[2];
+        user.wrapped_vault_key = params[3];
+        user.wrap_iv = params[4];
+        user.session_version += 1;
+        return { rowCount: 1 };
       }
 
       if (sql.includes('kdf_salt')) {
@@ -42,11 +61,19 @@ function makePool() {
       }
 
       if (sql.includes('auth_hash_hashed')) {
-        const user = users.get(params[0]);
+        const user = sql.includes('FOR UPDATE')
+          ? [...users.values()].find((candidate) => String(candidate.id) === params[0])
+          : users.get(params[0]);
         return { rows: user ? [user] : [] };
       }
 
       throw new Error(`Unexpected query: ${sql}`);
+    },
+    async connect() {
+      return {
+        query: this.query.bind(this),
+        release() {},
+      };
     },
   };
 }
@@ -88,6 +115,40 @@ test('registers, returns the stored salt, and logs in with a secure httpOnly coo
   assert.match(loginResponse.headers['set-cookie'][0], /HttpOnly/);
   assert.match(loginResponse.headers['set-cookie'][0], /Secure/);
   assert.match(loginResponse.headers['set-cookie'][0], /SameSite=Strict/);
+});
+
+test('changes the derived password material and invalidates the previous session', async () => {
+  const pool = makePool();
+  const app = createApp({ dbPool: pool });
+  const registration = validRegistration('rotate@example.com');
+  await request(app).post('/api/auth/register').send(registration);
+  const loginResponse = await request(app).post('/api/auth/login').send(registration);
+  const oldCookie = `session=${jwt.sign({ sub: '1', sv: 0 }, process.env.JWT_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: '8h',
+  })}`;
+  const replacement = {
+    currentAuthHash: registration.authHash,
+    kdfSalt: Buffer.alloc(16, 8).toString('base64'),
+    kdfIterations: 600000,
+    authHash: Buffer.alloc(32, 7).toString('base64'),
+    wrappedVaultKey: Buffer.alloc(48, 6).toString('base64'),
+    wrapIv: Buffer.alloc(12, 5).toString('base64'),
+  };
+
+  const changed = await request(app)
+    .post('/api/auth/change-password')
+    .set({ Cookie: [oldCookie] })
+    .send(replacement);
+  assert.equal(changed.status, 204);
+  assert.match(changed.headers['set-cookie'][0], /session=;/);
+
+  assert.equal((await request(app).post('/api/auth/logout').set({ Cookie: [oldCookie] })).status, 401);
+  const newLogin = await request(app).post('/api/auth/login').send({
+    email: registration.email,
+    authHash: replacement.authHash,
+  });
+  assert.equal(newLogin.status, 200);
 });
 
 // Verifica que la consulta de salt no permite enumerar cuentas por su respuesta.
