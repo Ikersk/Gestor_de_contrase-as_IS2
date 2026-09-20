@@ -1,4 +1,4 @@
-import { FormEvent, StrictMode, useEffect, useRef, useState } from "react";
+import { FormEvent, StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   changeMasterPassword,
@@ -24,9 +24,78 @@ import {
   PasswordCharacterOption,
 } from "./password-generator";
 import { getTotpSnapshot } from "./totp";
+import { auditVault } from "./vault-health";
 import { VaultHealthPanel } from "./VaultHealthPanel";
 
 type View = "login" | "register";
+function getFaviconUrl(url: string): string | null {
+  try {
+    const { hostname } = new URL(url);
+    if (!hostname) return null;
+    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+  } catch {
+    return null;
+  }
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (!navigator.clipboard) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type Theme = "dark" | "light";
+
+const THEME_KEY = "arca_theme";
+
+function getInitialTheme(): Theme {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+}
+
+function ThemeSwitcher() {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  useEffect(() => {
+    applyTheme(theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    function onChange(e: MediaQueryListEvent) {
+      if (!localStorage.getItem(THEME_KEY)) {
+        setTheme(e.matches ? "light" : "dark");
+      }
+    }
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const toggle = useCallback(() => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  }, []);
+
+  return (
+    <button
+      className="theme-toggle"
+      type="button"
+      onClick={toggle}
+      aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+    >
+      {theme === "dark" ? "☀" : "☾"}
+    </button>
+  );
+}
 // Estado inicial reutilizado al abrir el formulario y al limpiar una credencial.
 const emptyCredential: Credential = {
   title: "",
@@ -80,8 +149,10 @@ function TotpCode({ secret }: { secret: string }) {
   if (error) return <p className="totp-error" role="status">{error}</p>;
   if (!snapshot) return <p className="totp-loading" role="status">Calculando código...</p>;
 
+  const isCritical = snapshot.remainingSeconds <= 5;
+
   return (
-    <div className="totp-panel" aria-label="Código de autenticación de dos factores">
+    <div className={`totp-panel${isCritical ? " totp-critical" : ""}`} aria-label="Código de autenticación de dos factores">
       <div className="totp-panel-heading">
         <span>Código 2FA</span>
         <span>{snapshot.remainingSeconds}s</span>
@@ -94,7 +165,7 @@ function TotpCode({ secret }: { secret: string }) {
           {copied ? "Copiado" : "Copiar"}
         </button>
       </div>
-      <div className="totp-progress" role="progressbar" aria-label="Tiempo restante del código" aria-valuemin={0} aria-valuemax={30} aria-valuenow={snapshot.remainingSeconds}>
+      <div className={`totp-progress${isCritical ? " totp-progress-critical" : ""}`} role="progressbar" aria-label="Tiempo restante del código" aria-valuemin={0} aria-valuemax={30} aria-valuenow={snapshot.remainingSeconds}>
         <span style={{ transform: `scaleX(${snapshot.progress})` }} />
       </div>
     </div>
@@ -392,6 +463,7 @@ function Landing({ onAccess }: { onAccess: () => void }) {
           <button type="button" onClick={onAccess}>
             Entrar
           </button>
+          <ThemeSwitcher />
         </nav>
       </header>
       <main>
@@ -557,10 +629,26 @@ function App() {
   const [isCredentialModalOpen, setIsCredentialModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const credentialModalRef = useRef<HTMLDialogElement>(null);
+  const deleteConfirmModalRef = useRef<HTMLDialogElement>(null);
   const [revealedId, setRevealedId] = useState<number | string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const healthReport = useMemo(() => auditVault(credentials), [credentials]);
+  const affectedIds = useMemo(() => {
+    const ids = new Set<number | string>();
+    for (const alert of healthReport.reused) ids.add(alert.id);
+    for (const alert of healthReport.weak) ids.add(alert.id);
+    for (const alert of healthReport.breached) ids.add(alert.id);
+    return ids;
+  }, [healthReport]);
+  const breachedIds = useMemo(() => {
+    const ids = new Set<number | string>();
+    for (const alert of healthReport.breached) ids.add(alert.id);
+    return ids;
+  }, [healthReport]);
 
   useEffect(() => {
     const modal = credentialModalRef.current;
@@ -568,6 +656,13 @@ function App() {
     if (isCredentialModalOpen && !modal.open) modal.showModal();
     if (!isCredentialModalOpen && modal.open) modal.close();
   }, [isCredentialModalOpen]);
+
+  useEffect(() => {
+    const modal = deleteConfirmModalRef.current;
+    if (!modal) return;
+    if (deletingId !== null && !modal.open) modal.showModal();
+    if (deletingId === null && modal.open) modal.close();
+  }, [deletingId]);
 
   /** Registra una cuenta o inicia sesión y carga las credenciales tras desbloquear la bóveda. */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -618,6 +713,7 @@ function App() {
       setIsCredentialModalOpen(false);
       setIsChangePasswordModalOpen(false);
       setRevealedId(null);
+      setDeletingId(null);
       setBusy(false);
     }
   }
@@ -738,6 +834,7 @@ function App() {
   async function handleDelete(id: number | string) {
     setBusy(true);
     setError("");
+    setDeletingId(null);
     try {
       await removeCredential(id);
       setCredentials((current) => current.filter((item) => item.id !== id));
@@ -774,13 +871,16 @@ function App() {
             <span className="brand-symbol">A</span>
             <span>arca</span>
           </a>
-          <button
-            className="back-link"
-            type="button"
-            onClick={() => setShowAccess(false)}
-          >
-            Volver al inicio
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <button
+              className="back-link"
+              type="button"
+              onClick={() => setShowAccess(false)}
+            >
+              Volver al inicio
+            </button>
+            <ThemeSwitcher />
+          </div>
         </header>
         <AuthPanel
           view={view}
@@ -808,14 +908,17 @@ function App() {
           <span className="brand-symbol">A</span>
           <span>arca</span>
         </a>
-        <button
-          className="text-button"
-          type="button"
-          onClick={handleLogout}
-          disabled={busy}
-        >
-          {busy ? "Cerrando..." : "Cerrar sesión"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <button
+            className="text-button"
+            type="button"
+            onClick={handleLogout}
+            disabled={busy}
+          >
+            {busy ? "Cerrando..." : "Cerrar sesión"}
+          </button>
+          <ThemeSwitcher />
+        </div>
       </header>
       <section className="workspace-intro" aria-labelledby="vault-title">
         <h1 id="vault-title">Bóveda desbloqueada.</h1>
@@ -950,53 +1053,111 @@ function App() {
               </p>
             </div>
           )}
-          {credentials.map((item) => (
-            <article className="credential-item" key={item.id}>
-              <div className="credential-avatar">
-                {item.title.charAt(0).toUpperCase()}
-              </div>
-              <div className="credential-details">
-                <h3>{item.title}</h3>
-                <p>{item.username}</p>
-                {item.urls.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noreferrer">
-                    {url}
-                  </a>
-                ))}
-                <input
-                  className="password-preview"
-                  type={revealedId === item.id ? "text" : "password"}
-                  value={item.password}
-                  readOnly
-                  aria-label={`Contraseña de ${item.title}`}
-                />
-                {item.totpSecret && <TotpCode secret={item.totpSecret} />}
-              </div>
-              <div className="item-actions">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setRevealedId(revealedId === item.id ? null : item.id)
-                  }
-                >
-                  {revealedId === item.id ? "Ocultar" : "Mostrar"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openEditCredentialModal(item.id)}
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(item.id)}
-                  disabled={busy}
-                >
-                  Borrar
-                </button>
-              </div>
-            </article>
-          ))}
+          {credentials.map((item) => {
+            const firstUrl = item.urls.find((u) => u.length > 0);
+            const faviconUrl = firstUrl ? getFaviconUrl(firstUrl) : null;
+            const isAffected = affectedIds.has(item.id);
+            const isBreached = breachedIds.has(item.id);
+            const hasTotp = Boolean(item.totpSecret);
+
+            return (
+              <article className={`credential-card${isAffected ? " credential-card--affected" : ""}`} key={item.id}>
+                <div className="credential-card-header">
+                  <div className="credential-avatar">
+                    {faviconUrl ? (
+                      <img
+                        className="credential-favicon"
+                        src={faviconUrl}
+                        alt=""
+                        width="20"
+                        height="20"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : null}
+                    <span className={`credential-avatar-fallback${faviconUrl ? " credential-avatar-fallback--hidden" : ""}`}>
+                      {item.title.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="credential-title-group">
+                    <h3>{item.title}</h3>
+                    <div className="credential-badges">
+                      {hasTotp && (
+                        <span className="badge badge--2fa">2FA</span>
+                      )}
+                      {isBreached && (
+                        <span className="badge badge--breach">Comprometida</span>
+                      )}
+                      {!isBreached && isAffected && (
+                        <span className="badge badge--weak">Débil</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="item-actions">
+                    <button
+                      className="action-button"
+                      type="button"
+                      onClick={() => copyToClipboard(item.username)}
+                      title="Copiar usuario"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </button>
+                    <button
+                      className="action-button"
+                      type="button"
+                      onClick={() => setRevealedId(revealedId === item.id ? null : item.id)}
+                      title={revealedId === item.id ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{revealedId === item.id ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
+                    </button>
+                    <button
+                      className="action-button"
+                      type="button"
+                      onClick={() => copyToClipboard(item.password)}
+                      title="Copiar contraseña"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                    <button
+                      className="action-button"
+                      type="button"
+                      onClick={() => openEditCredentialModal(item.id)}
+                      title="Editar"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button
+                      className="action-button action-button--danger"
+                      type="button"
+                      onClick={() => setDeletingId(item.id)}
+                      disabled={busy}
+                      title="Borrar"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="credential-card-body">
+                  <p className="credential-username">{item.username}</p>
+                  {item.urls.map((url) => (
+                    <a key={url} href={url} target="_blank" rel="noreferrer" className="credential-url">
+                      {url}
+                    </a>
+                  ))}
+                  <div className="credential-secret-row">
+                    <label className="credential-secret-label">Contraseña</label>
+                    <input
+                      className="password-preview"
+                      type={revealedId === item.id ? "text" : "password"}
+                      value={item.password}
+                      readOnly
+                      aria-label={`Contraseña de ${item.title}`}
+                    />
+                  </div>
+                  {item.totpSecret && <TotpCode secret={item.totpSecret} />}
+                </div>
+              </article>
+            );
+          })}
         </section>
       </div>
       {message && (
@@ -1009,6 +1170,34 @@ function App() {
           {error}
         </p>
       )}
+      <dialog className="credential-modal confirm-modal" ref={deleteConfirmModalRef} onCancel={() => setDeletingId(null)}>
+        <div className="confirm-modal-body">
+          <div className="confirm-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <h2>Eliminar credencial</h2>
+          <p>
+            Se eliminará <strong>{deletingId !== null ? (credentials.find((c) => c.id === deletingId)?.title ?? "esta credencial") : ""}</strong> de tu bóveda. Esta acción no se puede deshacer.
+          </p>
+          <div className="confirm-actions">
+            <button
+              className="primary-button confirm-danger"
+              type="button"
+              onClick={() => handleDelete(deletingId!)}
+              disabled={busy}
+            >
+              {busy ? "Eliminando..." : "Eliminar"}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setDeletingId(null)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </dialog>
     </main>
   );
 }

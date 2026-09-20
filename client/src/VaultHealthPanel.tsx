@@ -1,5 +1,8 @@
+import { useState } from "react";
 import type { DecryptedCredential } from "./vault";
 import { auditVault } from "./vault-health";
+import type { VaultHealthAlert } from "./vault-health";
+import { checkCredentialsBreach } from "./hibp";
 
 interface VaultHealthPanelProps {
   credentials: DecryptedCredential[];
@@ -10,7 +13,7 @@ function AlertList({
   alerts,
   onEdit,
 }: {
-  alerts: ReturnType<typeof auditVault>["reused"];
+  alerts: VaultHealthAlert[];
   onEdit: (id: number | string) => void;
 }) {
   return (
@@ -32,8 +35,30 @@ function AlertList({
 }
 
 export function VaultHealthPanel({ credentials, onEdit }: VaultHealthPanelProps) {
-  const report = auditVault(credentials);
-  const isHealthy = report.reused.length === 0 && report.weak.length === 0;
+  const [breachedAlerts, setBreachedAlerts] = useState<VaultHealthAlert[]>([]);
+  const [isChecking, setIsChecking] = useState(false);
+  const [checkedCount, setCheckedCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const report = auditVault(credentials, breachedAlerts);
+  const isHealthy = report.reused.length === 0 && report.weak.length === 0 && report.breached.length === 0;
+
+  async function handleCheckBreach() {
+    setIsChecking(true);
+    setCheckedCount(0);
+    setError(null);
+
+    try {
+      const alerts = await checkCredentialsBreach(credentials, (checked) => {
+        setCheckedCount(checked);
+      });
+      setBreachedAlerts(alerts);
+    } catch {
+      setError("No se pudo conectar con Have I Been Pwned. Inténtalo de nuevo.");
+    } finally {
+      setIsChecking(false);
+    }
+  }
 
   return (
     <section className="vault-health" aria-labelledby="vault-health-title">
@@ -67,7 +92,36 @@ export function VaultHealthPanel({ credentials, onEdit }: VaultHealthPanelProps)
         <span className={report.weak.length > 0 ? "health-stat warning" : "health-stat"}>
           <strong>{report.weak.length}</strong> débiles
         </span>
+        <span className={report.breached.length > 0 ? "health-stat warning" : "health-stat"}>
+          <strong>{report.breached.length}</strong> filtradas
+        </span>
       </div>
+
+      <div className="health-breach-check">
+        {isChecking ? (
+          <div className="breach-progress">
+            <span>Comprobando filtraciones... {checkedCount}/{credentials.length}</span>
+            <div className="breach-progress-bar">
+              <span
+                style={{
+                  transform: `scaleX(${credentials.length > 0 ? checkedCount / credentials.length : 0})`,
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <button
+            className="health-resolve-button breach-check-button"
+            type="button"
+            onClick={handleCheckBreach}
+            disabled={credentials.length === 0}
+          >
+            Comprobar filtraciones
+          </button>
+        )}
+        {error && <p className="breach-error">{error}</p>}
+      </div>
+
       {isHealthy ? (
         <p className="health-empty" role="status">
           {credentials.length === 0
@@ -86,6 +140,12 @@ export function VaultHealthPanel({ credentials, onEdit }: VaultHealthPanelProps)
             <div className="health-alert-group">
               <h3>Contraseñas débiles</h3>
               <AlertList alerts={report.weak} onEdit={onEdit} />
+            </div>
+          )}
+          {report.breached.length > 0 && (
+            <div className="health-alert-group">
+              <h3>Contraseñas comprometidas</h3>
+              <AlertList alerts={report.breached} onEdit={onEdit} />
             </div>
           )}
         </div>

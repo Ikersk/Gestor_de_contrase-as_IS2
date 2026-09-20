@@ -14,6 +14,7 @@ export interface VaultHealthReport {
   score: number;
   reused: VaultHealthAlert[];
   weak: VaultHealthAlert[];
+  breached: VaultHealthAlert[];
 }
 
 function estimateEntropy(password: string) {
@@ -30,7 +31,10 @@ function toAlert(credential: DecryptedCredential, reason: string): VaultHealthAl
   };
 }
 
-export function auditVault(credentials: DecryptedCredential[]): VaultHealthReport {
+export function auditVault(
+  credentials: DecryptedCredential[],
+  breachedAlerts: VaultHealthAlert[] = []
+): VaultHealthReport {
   const passwordOwners = new Map<string, DecryptedCredential[]>();
 
   for (const credential of credentials) {
@@ -51,10 +55,14 @@ export function auditVault(credentials: DecryptedCredential[]): VaultHealthRepor
     })
     .map((credential) => toAlert(credential, "Usa una contraseña más larga y variada."));
 
-  const affectedIds = new Set([...reused, ...weak].map((alert) => alert.id));
+  const affectedIds = new Set([
+    ...reused,
+    ...weak,
+    ...breachedAlerts,
+  ].map((alert) => alert.id));
   const score = credentials.length === 0
     ? 100
     : Math.round(((credentials.length - affectedIds.size) / credentials.length) * 100);
 
-  return { score, reused, weak };
+  return { score, reused, weak, breached: breachedAlerts };
 }
