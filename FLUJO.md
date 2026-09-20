@@ -228,7 +228,12 @@ El cliente comprueba los limites de longitud, los campos obligatorios y que la U
 
 ### Paso 2: serializacion
 
-La credencial se convierte a JSON y despues a bytes UTF-8:
+La credencial se convierte a JSON y despues a bytes UTF-8. Puede contener una
+lista de URLs, que se cifra dentro del mismo objeto junto con el resto de campos:
+
+```json
+{"title":"Correo","username":"ana","password":"...","urls":["https://mail.example","https://webmail.example"]}
+```
 
 ```text
 JSON.stringify(credential) -> TextEncoder -> bytes

@@ -44,8 +44,8 @@ credenciales para la cookie de sesion. El backend tambien envia una CSP estricta
 mediante Helmet.
 
 Los formularios limitan el correo a 40 caracteres, la contrasena maestra a 42,
-el nombre de credencial a 30, el usuario a 30, la contrasena guardada a 32 y la
-URL a 100. Nombre y usuario deben contener al menos una letra. Las credenciales
+el nombre de credencial a 30, el usuario a 30, cada URL a 100 y permiten hasta
+8 URLs por credencial. Nombre y usuario deben contener al menos una letra. Las credenciales
 se validan en el cliente antes de cifrarse; el backend limita ademas el cuerpo
 JSON y los blobs cifrados.
 
