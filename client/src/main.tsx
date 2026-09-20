@@ -28,6 +28,7 @@ import { auditVault } from "./vault-health";
 import { VaultHealthPanel } from "./VaultHealthPanel";
 
 type View = "login" | "register";
+type Toast = { id: number; message: string; type: "success" | "error"; exiting?: boolean };
 function getFaviconUrl(url: string): string | null {
   try {
     const { hostname } = new URL(url);
@@ -104,7 +105,7 @@ const emptyCredential: Credential = {
   urls: [""],
 };
 
-function TotpCode({ secret }: { secret: string }) {
+function TotpCode({ secret, onCopy }: { secret: string; onCopy?: () => void }) {
   const [snapshot, setSnapshot] = useState<ReturnType<typeof getTotpSnapshot> | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -141,6 +142,7 @@ function TotpCode({ secret }: { secret: string }) {
     try {
       await navigator.clipboard.writeText(snapshot.code);
       setCopied(true);
+      onCopy?.();
     } catch {
       setError("No se pudo copiar el código");
     }
@@ -635,6 +637,19 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
+
+  function addToast(msg: string, type: Toast["type"] = "success") {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, message: msg, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.map((t) => t.id === id ? { ...t, exiting: true } : t));
+    }, 2750);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }
 
   const healthReport = useMemo(() => auditVault(credentials), [credentials]);
   const affectedIds = useMemo(() => {
@@ -1096,7 +1111,7 @@ function App() {
                     <button
                       className="action-button"
                       type="button"
-                      onClick={() => copyToClipboard(item.username)}
+                      onClick={async () => { if (await copyToClipboard(item.username)) addToast("Usuario copiado"); }}
                       title="Copiar usuario"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1112,7 +1127,7 @@ function App() {
                     <button
                       className="action-button"
                       type="button"
-                      onClick={() => copyToClipboard(item.password)}
+                      onClick={async () => { if (await copyToClipboard(item.password)) addToast("Contraseña copiada"); }}
                       title="Copiar contraseña"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -1153,7 +1168,7 @@ function App() {
                       aria-label={`Contraseña de ${item.title}`}
                     />
                   </div>
-                  {item.totpSecret && <TotpCode secret={item.totpSecret} />}
+                   {item.totpSecret && <TotpCode secret={item.totpSecret} onCopy={() => addToast("Código TOTP copiado")} />}
                 </div>
               </article>
             );
@@ -1198,6 +1213,15 @@ function App() {
           </div>
         </div>
       </dialog>
+      <div className="toast-container" aria-live="polite">
+        {toasts.map((t) => (
+          <div className={`toast toast--${t.type}${t.exiting ? " toast--exit" : ""}`} key={t.id}>
+            <svg className="toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            <span className="toast-message">{t.message}</span>
+            <div className="toast-progress"><span /></div>
+          </div>
+        ))}
+      </div>
     </main>
   );
 }
