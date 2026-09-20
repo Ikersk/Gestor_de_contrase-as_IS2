@@ -96,6 +96,19 @@ export function logoutAccount() {
   return request<void>('/auth/logout', { method: 'POST' });
 }
 
+/** Comprueba si la cookie de sesión sigue siendo válida y devuelve los datos necesarios para reabrir la bóveda. */
+export interface SessionResponse {
+  email: string;
+  wrappedVaultKey: string;
+  wrapIv: string;
+  kdfSalt: string;
+  kdfIterations: number;
+}
+
+export function checkSession() {
+  return request<SessionResponse>('/auth/session');
+}
+
 /** Recupera los blobs cifrados de la cuenta activa; nunca devuelve texto plano. */
 export function getVaultItems() {
   return request<VaultItemResponse[]>('/vault');
