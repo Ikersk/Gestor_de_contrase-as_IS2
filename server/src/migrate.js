@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+// CLI de mantenimiento: comprueba la conexion o aplica el esquema inicial.
 const {
   checkDatabaseConnection,
   closeDatabase,
@@ -11,6 +12,7 @@ async function main() {
   await checkDatabaseConnection();
 
   if (checkOnly) {
+    // --check no modifica la base de datos; solo sirve para diagnosticar conectividad.
     console.log('PostgreSQL connection is available.');
     return;
   }

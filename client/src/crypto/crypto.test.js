@@ -12,7 +12,9 @@ import {
 } from './vault-key.js';
 import { decryptItem, encryptItem } from './cipher.js';
 
+// Estos tests comprueban el contrato criptografico del cliente sin depender del servidor.
 describe('client cryptography', () => {
+  // La derivacion debe producir material distinto para cifrado y autenticacion.
   it('derives separate encryption and authentication material', async () => {
     const salt = new Uint8Array(16).fill(7);
     const masterKey = await deriveMasterKey(
@@ -28,6 +30,7 @@ describe('client cryptography', () => {
     expect(subkeys.encryptionKey.type).toBe('secret');
   });
 
+  // La clave de la boveda se almacena envuelta, nunca como bytes legibles.
   it('wraps and unwraps the vault key', async () => {
     const masterKey = await deriveMasterKey('test password', new Uint8Array(16).fill(3), 1_000);
     const { encryptionKey } = await deriveSubkeys(masterKey);
@@ -43,6 +46,7 @@ describe('client cryptography', () => {
     expect(unwrapped).toEqual(vaultKey);
   });
 
+  // Verifica que una credencial conserva exactamente su contenido tras cifrar y descifrar.
   it('encrypts and decrypts a vault object', async () => {
     const vaultKey = randomBytes(32);
     const entry = {
@@ -55,6 +59,7 @@ describe('client cryptography', () => {
     await expect(decryptItem(vaultKey, encrypted.iv, encrypted.ciphertext)).resolves.toEqual(entry);
   });
 
+  // El IV nuevo evita repetir el ciphertext; el IV fijo solo se usa para comprobar el vector.
   it('is deterministic only when the same IV is explicitly forced in tests', async () => {
     const vaultKey = randomBytes(32);
     const entry = { title: 'Example', password: 'secret' };

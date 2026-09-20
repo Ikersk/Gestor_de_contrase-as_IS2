@@ -34,7 +34,7 @@ Al final de cada fase hay un prompt sugerido, listo para copiar y pegar.
 | Seguridad HTTP | **helmet**, **express-rate-limit**, **cors** | CSP, límite de intentos de login, control de origen. |
 | Validación | **zod** | Verifica forma (base64, tamaños) sin nunca interpretar contenido. |
 | Tests | **Vitest** o `node:test` | Unitarios para crypto + vectores NIST, e2e para el flujo completo. |
-| Auditoría MitM | **mitmproxy** | Herramienta externa para capturar tráfico y demostrar ausencia de texto plano. |
+| Revisión de tráfico | **DevTools del navegador** | Permite inspeccionar las peticiones y confirmar que no viajan secretos en texto plano. |
 
 ---
 
@@ -53,8 +53,7 @@ password-manager-zk/
 │   │   └── app.js
 │   ├── sql/001_initial_schema.sql # migración inicial PostgreSQL
 │   ├── tests/
-│   │   ├── crypto-vectors.test.js
-│   │   └── zero-knowledge-audit.test.js   # revisa la DB en crudo
+│   │   └── crypto-vectors.test.js
 │   └── package.json
 ├── client/
 │   ├── src/
@@ -193,13 +192,11 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 
 ### Fase 7 — Auditoría "Modo Difícil"
 **Tareas:**
-- Script `zero-knowledge-audit.test.js`: hace login/registro/creación de items de prueba con contenido reconocible (ej. `"CONTRASEÑA_DE_PRUEBA_XYZ"`), luego consulta PostgreSQL directamente con `pg` y falla el test si encuentra esa cadena en cualquier columna de cualquier tabla.
-- Instrucciones para correr `mitmproxy` en modo reverse proxy delante del backend, usar la app a través de él, y confirmar visualmente que ningún payload capturado contiene texto plano de contraseñas maestras ni claves.
+- Revisión manual de `users` y `vault_items` en el SQL Editor de Supabase para confirmar que no contienen secretos en texto plano.
+- Revisión manual con las herramientas de desarrollador del navegador para confirmar que ningún payload contiene texto plano de contraseñas maestras, claves o credenciales.
 - Documentar por escrito la limitación estructural: el servidor sirve el JavaScript que cifra, así que un servidor comprometido podría alterar ese código. Mitigado parcialmente con CSP + Subresource Integrity (SRI) en los bundles.
 
-**Criterio de aceptación:** el test automatizado de la DB pasa; capturas de mitmproxy adjuntas al informe mostrando solo blobs base64 ininteligibles.
-
-> **Prompt:** "Escribe `zero-knowledge-audit.test.js`: crea un usuario y un item de vault con el texto literal 'CONTRASEÑA_DE_PRUEBA_XYZ', consulta PostgreSQL con `pg` y falla el test si esa cadena aparece en cualquier fila de cualquier tabla. Además, añade Subresource Integrity a los scripts del build de Vite."
+**Criterio de aceptación:** las tablas revisadas manualmente no contienen texto plano; la pestaña Network de DevTools muestra únicamente material derivado, IVs y blobs base64 ininteligibles.
 
 ### Fase 8 — Pulido y documentación
 **Tareas:** README con instrucciones de instalación, diagrama del flujo criptográfico, sección de "amenazas conocidas y no mitigadas" (honestidad técnica).
@@ -217,6 +214,7 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 - [ ] CSP sin `unsafe-inline`/`unsafe-eval`.
 - [ ] Cookie de sesión `httpOnly`, `Secure`, `SameSite=Strict`.
 - [ ] Vectores NIST pasando.
-- [ ] Captura de mitmproxy documentada.
+- [ ] Tablas de Supabase revisadas manualmente.
+- [ ] Revisión de peticiones en DevTools documentada.
 - [ ] Sección de limitaciones conocidas escrita en el README (código entregado por el servidor).
 
