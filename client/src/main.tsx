@@ -451,17 +451,110 @@ function AuthPanel({
   );
 }
 
+function CryptoDemo() {
+  const [input, setInput] = useState("");
+  const [cipher, setCipher] = useState<{ iv: string; ciphertext: string } | null>(null);
+  const [encrypting, setEncrypting] = useState(false);
+
+  const encrypt = useCallback(async (plain: string) => {
+    if (!plain) { setCipher(null); return; }
+    setEncrypting(true);
+    try {
+      const enc = new TextEncoder();
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+      const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plain));
+      setCipher({
+        iv: Array.from(iv).map((b) => b.toString(16).padStart(2, "0")).join(""),
+        ciphertext: Array.from(new Uint8Array(ct)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 96) + "…",
+      });
+    } catch { setCipher(null); }
+    finally { setEncrypting(false); }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => encrypt(input), 300);
+    return () => clearTimeout(t);
+  }, [input, encrypt]);
+
+  return (
+    <div className="crypto-demo">
+      <div className="demo-header">
+        <span className="demo-dot" />
+        <span className="demo-dot demo-dot--warn" />
+        <span className="demo-dot demo-dot--safe" />
+        <span className="demo-title">crypto-demo.local</span>
+      </div>
+      <div className="demo-body">
+        <label className="demo-label" htmlFor="demo-input">Texto plano</label>
+        <input
+          id="demo-input"
+          className="demo-input"
+          type="text"
+          placeholder="Escribe algo para cifrar…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <div className="demo-output-grid">
+          <div className="demo-output-block">
+            <span className="demo-tag">CIPHERTEXT</span>
+            <code className="demo-code">
+              {cipher ? cipher.ciphertext : "af09c1b3e7…"}
+            </code>
+          </div>
+          <div className="demo-output-block">
+            <span className="demo-tag">IV (12 bytes)</span>
+            <code className="demo-code demo-code--iv">
+              {cipher ? cipher.iv : "a4f208e19c3b…"}
+            </code>
+          </div>
+        </div>
+        <p className="demo-footnote">
+          {encrypting
+            ? "Cifrando con AES-256-GCM…"
+            : cipher
+              ? "Generado localmente con Web Crypto API. El servidor jamás ve este dato."
+              : "Escribe para ver cómo se cifra en tu navegador."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** Página pública que explica el modelo zero-knowledge y dirige al formulario de acceso. */
 function Landing({ onAccess }: { onAccess: () => void }) {
+  const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setVisibleSections((prev) => new Set(prev).add(entry.target.getAttribute("data-reveal") || ""));
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" },
+    );
+    document.querySelectorAll("[data-reveal]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  const reveal = (id: string) => visibleSections.has(id) ? "revealed" : "";
+
   return (
     <div className="landing-page">
+      <div className="landing-grid-bg" aria-hidden="true" />
       <header className="site-header">
         <a className="brand" href="/" aria-label="Arca, inicio">
           <span className="brand-symbol">A</span>
           <span>arca</span>
         </a>
         <nav className="site-nav" aria-label="Navegación principal">
-          <a href="#principios">Principios</a>
+          <a href="#arquitectura">Arquitectura</a>
+          <a href="#funcionalidades">Funcionalidades</a>
           <button type="button" onClick={onAccess}>
             Entrar
           </button>
@@ -469,143 +562,174 @@ function Landing({ onAccess }: { onAccess: () => void }) {
         </nav>
       </header>
       <main>
+        {/* ── Hero ── */}
         <section className="hero-section" aria-labelledby="hero-title">
           <div className="hero-copy">
-            <p className="kicker">Gestor de accesos zero knowledge</p>
+            <div className="hero-badges">
+              <span className="security-badge">256-bit AES-GCM</span>
+              <span className="security-badge">Zero-Knowledge</span>
+            </div>
             <h1 id="hero-title">
-              Tus accesos,
+              Tus secretos nunca salen de
               <br />
-              <span>bajo tus reglas.</span>
+              <span>tu dispositivo.</span>
             </h1>
             <p className="hero-description">
-              Arca cifra tus credenciales en tu dispositivo para que puedas
-              guardar lo importante sin entregar tus secretos a nadie.
+              Arca deriva tus claves de cifrado directamente en tu navegador con
+              PBKDF2 y cifra cada credencial con AES-256-GCM antes de tocar la red.
+              El servidor solo almacena blobs indescifrables.
             </p>
             <div className="hero-actions">
-              <button
-                className="primary-button"
-                type="button"
-                onClick={onAccess}
-              >
-                Crear mi bóveda <span aria-hidden="true">↗</span>
+              <button className="primary-button hero-cta" type="button" onClick={onAccess}>
+                Probar Bóveda <span aria-hidden="true">↗</span>
               </button>
-              <span className="risk-note">
-                Gratis para empezar <span aria-hidden="true">·</span> Sin
-                tarjeta
-              </span>
             </div>
           </div>
-          <div className="vault-art" aria-label="Diagrama de cifrado local">
-            <div className="vault-art-grid" aria-hidden="true" />
-            <div className="vault-core">
-              <span className="core-mark">A</span>
-              <span className="core-label">BÓVEDA</span>
-            </div>
-            <span className="orbit-label label-top">TU CLAVE MAESTRA</span>
-            <span className="orbit-label label-right">ENCRIPTACIÓN</span>
-            <span className="orbit-label label-bottom">SOLO TÚ</span>
-            <span className="orbit-label secondary-label secondary-top">
-              SEGURIDAD
-            </span>
-            <span className="orbit-label secondary-label secondary-right">
-              SECRETOS
-            </span>
-            <span className="orbit-label secondary-label secondary-bottom">
-              CIFRADO
-            </span>
-            <div className="orbit-line orbit-line-one" aria-hidden="true" />
-            <div className="orbit-line orbit-line-two" aria-hidden="true" />
-          </div>
+          <CryptoDemo />
         </section>
+
+        {/* ── Signal bar ── */}
         <section className="signal-bar" aria-label="Principios de seguridad">
-          <span>
-            <i className="signal-dot" /> Cifrado local
-          </span>
+          <span><i className="signal-dot" /> Cifrado local</span>
           <span>Tu clave nunca se almacena</span>
           <span>Sesiones temporales</span>
+          <span>Auditoría en tiempo real</span>
         </section>
-        <section
-          className="principles-section"
-          id="principios"
-          aria-labelledby="principles-title"
-        >
-          <div className="section-intro">
-            <p className="kicker">La diferencia está en dónde ocurre</p>
-            <h2 id="principles-title">Privacidad que se puede explicar.</h2>
-            <p>
-              No necesitas confiar a ciegas. Arca está diseñada para que el
-              recorrido de tus credenciales sea fácil de entender.
-            </p>
+
+        {/* ── Architecture: Backend Ciego ── */}
+        <section className="arch-section" id="arquitectura" aria-labelledby="arch-title" data-reveal="arch">
+          <div className={`section-intro reveal-item ${reveal("arch")}`}>
+            <p className="kicker">Backend Ciego — Zero-Knowledge</p>
+            <h2 id="arch-title">Así se ve la privacidad por diseño.</h2>
+            <p>Tus credenciales nunca están en texto plano en ningún servidor. Cada paso ocurre en tu RAM.</p>
           </div>
-          <div className="principles-grid">
-            <article>
-              <span className="principle-index">01</span>
-              <h3>Se cifra antes de salir</h3>
-              <p>
-                Tu contraseña maestra deriva las claves en el navegador. El
-                servidor recibe únicamente material cifrado.
-              </p>
+          <div className="arch-steps">
+            <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "100ms" }}>
+              <span className="arch-step-num">01</span>
+              <div className="arch-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+                  <circle cx="12" cy="12" r="4"/>
+                </svg>
+              </div>
+              <h3>Derivación de clave</h3>
+              <p>PBKDF2 con 600 000 iteraciones genera tu clave AES-256 en la RAM del navegador. Nunca sale de tu dispositivo.</p>
+              <span className="arch-tag">PBKDF2 · 600K iteraciones</span>
             </article>
-            <article>
-              <span className="principle-index">02</span>
-              <h3>Se descifra cuando hace falta</h3>
-              <p>
-                La bóveda solo se abre en una sesión activa y la clave
-                desaparece al cerrarla.
-              </p>
+            <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "250ms" }}>
+              <span className="arch-step-num">02</span>
+              <div className="arch-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  <circle cx="12" cy="16" r="1"/>
+                </svg>
+              </div>
+              <h3>Cifrado AES-GCM</h3>
+              <p>Cada payload se cifra con un IV aleatorio antes de tocar la red. El navegador genera ciphertext y IV que son ilegibles.</p>
+              <span className="arch-tag">AES-256-GCM · IV aleatorio</span>
             </article>
-            <article>
-              <span className="principle-index">03</span>
-              <h3>Se organiza sin ruido</h3>
-              <p>
-                Guarda nombres, usuarios, contraseñas y URLs en una vista
-                pensada para volver cada día.
-              </p>
+            <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "400ms" }}>
+              <span className="arch-step-num">03</span>
+              <div className="arch-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                </svg>
+              </div>
+              <h3>Supabase guarda blobs</h3>
+              <p>El servidor solo recibe datos cifrados. Ni Supabase ni Arca pueden leer tus credenciales — solo tú tienes la clave.</p>
+              <span className="arch-tag">Zero-Knowledge · Cero acceso</span>
             </article>
           </div>
         </section>
-        <section className="faq-section" aria-labelledby="faq-title">
-          <div className="section-intro">
+
+        {/* ── Features showcase ── */}
+        <section className="features-section" id="funcionalidades" aria-labelledby="features-title" data-reveal="features">
+          <div className={`section-intro reveal-item ${reveal("features")}`}>
+            <p className="kicker">Funcionalidades avanzadas</p>
+            <h2 id="features-title">Seguridad sin complejidad.</h2>
+          </div>
+          <div className="features-grid">
+            <article className={`feature-card reveal-item ${reveal("features")}`} style={{ animationDelay: "80ms" }}>
+              <div className="feature-icon feature-icon--health">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+              </div>
+              <h3>Auditoría de Salud</h3>
+              <p>Analiza entropía, detecta contraseñas débiles y reutilizadas en tiempo real. Scores y métricas para cada credencial.</p>
+              <span className="feature-tag">Entropía · Scores · Métricas</span>
+            </article>
+            <article className={`feature-card reveal-item ${reveal("features")}`} style={{ animationDelay: "200ms" }}>
+              <div className="feature-icon feature-icon--breach">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <h3>Alertas de Brechas HIBP</h3>
+              <p>
+                Verifica credenciales contra Have I Been Pwned usando k-Anonymity:
+                solo el hash SHA-1 (5 prefijos) sale de tu dispositivo, nunca tu contraseña completa.
+              </p>
+              <span className="feature-tag">k-Anonymity · SHA-1 local</span>
+            </article>
+            <article className={`feature-card reveal-item ${reveal("features")}`} style={{ animationDelay: "320ms" }}>
+              <div className="feature-icon feature-icon--totp">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <h3>Autenticador TOTP 2FA</h3>
+              <p>Genera códigos de autenticación de dos factores directamente desde tu bóveda. Cronómetro visual en tiempo real.</p>
+              <span className="feature-tag">TOTP · Cronómetro en vivo</span>
+            </article>
+          </div>
+        </section>
+
+        {/* ── FAQ ── */}
+        <section className="faq-section" aria-labelledby="faq-title" data-reveal="faq">
+          <div className={`section-intro reveal-item ${reveal("faq")}`}>
             <p className="kicker">Preguntas honestas</p>
             <h2 id="faq-title">Lo que necesitas saber antes de empezar.</h2>
           </div>
           <div className="faq-list">
             <details>
               <summary>¿Puede Arca ver mis contraseñas?</summary>
-              <p>
-                No. Tus credenciales se cifran en el dispositivo y el servidor
-                no recibe los valores legibles.
-              </p>
+              <p>No. Tus credenciales se cifran en el dispositivo y el servidor no recibe los valores legibles. El cifrado ocurre 100% en tu navegador con Web Crypto API.</p>
             </details>
             <details>
-              <summary>¿Qué ocurre si olvido mi contraseña maestra?</summary>
-              <p>
-                No existe una copia de recuperación. Es la consecuencia de que
-                nadie más pueda abrir tu bóveda.
-              </p>
+              <summary>¿Qué pasa si olvido mi contraseña maestra?</summary>
+              <p>No existe una copia de recuperación. Es la consecuencia directa de que nadie más — ni siquiera nosotros — pueda abrir tu bóveda.</p>
             </details>
             <details>
-              <summary>¿Tiene coste crear una cuenta?</summary>
-              <p>No. Puedes crear una cuenta y probar la bóveda sin tarjeta.</p>
+              <summary>¿Cómo funciona la verificación de brechas?</summary>
+              <p>Usamos k-Anonymity con HIBP: calculamos SHA-1 de tu contraseña localmente y solo enviamos los 5 primeros caracteres del hash. Tu contraseña completa nunca sale del navegador.</p>
             </details>
           </div>
         </section>
-        <section className="closing-section">
-          <div>
-            <p className="kicker">Empieza con una decisión</p>
+
+        {/* ── Closing CTA ── */}
+        <section className="closing-section" data-reveal="closing">
+          <div className={`closing-inner reveal-item ${reveal("closing")}`}>
+            <div className="hero-badges" style={{ marginBottom: 24 }}>
+              <span className="security-badge">Zero-Knowledge Certified</span>
+              <span className="security-badge">Código Abierto</span>
+            </div>
             <h2>
               Menos exposición.
               <br />
-              Más control.
+              <span>Más control.</span>
             </h2>
+            <p className="closing-description">
+              Tus secretos son tuyos. Arca solo guarda lo que tú decides cifrar.
+            </p>
+            <button className="primary-button hero-cta" type="button" onClick={onAccess}>
+              Abrir mi bóveda <span aria-hidden="true">↗</span>
+            </button>
           </div>
-          <button
-            className="primary-button light-button"
-            type="button"
-            onClick={onAccess}
-          >
-            Abrir mi bóveda <span aria-hidden="true">↗</span>
-          </button>
         </section>
       </main>
       <footer className="site-footer">
