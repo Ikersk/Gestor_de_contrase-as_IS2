@@ -65,14 +65,12 @@ export function validateCredential(credential: ValidatableCredential) {
     return 'Introduce un secreto TOTP Base32 válido o una URI otpauth válida';
   }
 
-  if (!Array.isArray(credential.urls) || credential.urls.length === 0) {
-    return 'Añade al menos una URL';
-  }
   if (credential.urls.length > FIELD_LIMITS.maxUrls) {
     return `No puedes añadir más de ${FIELD_LIMITS.maxUrls} URLs`;
   }
   for (const url of credential.urls) {
-    if (!url || url.length > FIELD_LIMITS.url) {
+    if (!url) continue;
+    if (url.length > FIELD_LIMITS.url) {
       return `Cada URL debe tener entre 1 y ${FIELD_LIMITS.url} caracteres`;
     }
     try {

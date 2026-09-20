@@ -1213,7 +1213,7 @@ function App() {
               }
             />
             <fieldset className="url-fields">
-              <legend>URLs</legend>
+              <legend>URLs <span>Opcional</span></legend>
               {credential.urls.map((url, index) => (
                 <div className="url-row" key={`credential-url-${index}`}>
                   <input
@@ -1224,7 +1224,6 @@ function App() {
                     placeholder="https://"
                     value={url}
                     onChange={(event) => updateCredentialUrl(index, event.target.value)}
-                    required
                   />
                   <button className="secondary-button" type="button" onClick={() => removeCredentialUrl(index)} disabled={credential.urls.length === 1}>
                     Quitar
