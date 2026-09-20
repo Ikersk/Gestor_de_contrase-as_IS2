@@ -616,6 +616,37 @@ function Landing({ onAccess }: { onAccess: () => void }) {
   );
 }
 
+function VaultSkeleton() {
+  return (
+    <div className="vault-skeleton" aria-hidden="true">
+      <div className="skeleton-row">
+        <div className="skeleton-block skeleton-progress" style={{ width: "100%", height: 8 }} />
+      </div>
+      <div className="skeleton-stats">
+        <div className="skeleton-block skeleton-stat" />
+        <div className="skeleton-block skeleton-stat" />
+        <div className="skeleton-block skeleton-stat" />
+      </div>
+      {[0, 1, 2].map((i) => (
+        <div className="skeleton-card" key={i}>
+          <div className="skeleton-row">
+            <div className="skeleton-block skeleton-avatar" />
+            <div className="skeleton-lines">
+              <div className="skeleton-block skeleton-line skeleton-line--medium" />
+              <div className="skeleton-block skeleton-line skeleton-line--short" />
+            </div>
+            <div className="skeleton-actions">
+              <div className="skeleton-block skeleton-action" />
+              <div className="skeleton-block skeleton-action" />
+              <div className="skeleton-block skeleton-action" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Coordina la navegación, la sesión en memoria y las operaciones CRUD de la bóveda. */
 function App() {
   const [view, setView] = useState<View>("login");
@@ -623,6 +654,7 @@ function App() {
   const [email, setEmail] = useState("");
   const [masterPassword, setMasterPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
+  const [decrypting, setDecrypting] = useState(false);
   const [credentials, setCredentials] = useState<
     Array<Credential & { id: number | string }>
   >([]);
@@ -692,8 +724,10 @@ function App() {
         setMessage("Cuenta creada. Inicia sesión para abrir tu bóveda.");
       } else {
         await loginWithMasterPassword(email, masterPassword);
-        setCredentials(await listCredentials());
         setAuthenticated(true);
+        setDecrypting(true);
+        setCredentials(await listCredentials());
+        setDecrypting(false);
         setMessage("Bóveda desbloqueada en memoria.");
       }
       setMasterPassword("");
@@ -722,6 +756,7 @@ function App() {
       );
     } finally {
       setAuthenticated(false);
+      setDecrypting(false);
       setCredentials([]);
       setCredential(emptyCredential);
       setEditingId(null);
@@ -747,6 +782,7 @@ function App() {
         throw new Error("Las nuevas contraseñas no coinciden");
       await changeMasterPassword(currentPassword, newPassword);
       setAuthenticated(false);
+      setDecrypting(false);
       setCredentials([]);
       setCredential(emptyCredential);
       setEditingId(null);
@@ -935,6 +971,9 @@ function App() {
           <ThemeSwitcher />
         </div>
       </header>
+      {decrypting ? (
+        <VaultSkeleton />
+      ) : (<>
       <section className="workspace-intro" aria-labelledby="vault-title">
         <h1 id="vault-title">Bóveda desbloqueada.</h1>
         <button className="primary-button new-credential-button" type="button" onClick={openNewCredentialModal}>
@@ -1213,6 +1252,7 @@ function App() {
           </div>
         </div>
       </dialog>
+      </>)}
       <div className="toast-container" aria-live="polite">
         {toasts.map((t) => (
           <div className={`toast toast--${t.type}${t.exiting ? " toast--exit" : ""}`} key={t.id}>
