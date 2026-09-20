@@ -117,11 +117,44 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 .text-button { color: var(--coral-dark); }
 .workspace-intro { display: flex; align-items: end; justify-content: space-between; gap: 32px; padding: 80px 0 56px; }
 .workspace-intro h1 { margin-bottom: 16px; color: var(--ink); font-size: clamp(48px, 6vw, 76px); line-height: 1; }
+.new-credential-button { flex: 0 0 auto; }
 .summary { max-width: 500px; margin: 0; color: var(--muted); font-size: 16px; line-height: 26px; }
 .vault-layout { display: grid; grid-template-columns: minmax(280px, 0.7fr) minmax(0, 1.3fr); gap: 64px; align-items: start; }
 .account-panel { max-width: 480px; margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--line); }
 .account-panel .credential-form { max-width: 360px; }
-.vault-composer { padding: 28px; border: 1px solid var(--line); background: var(--paper); }
+.account-panel > .secondary-button { font-size: 13px; }
+.vault-health { margin-bottom: 56px; padding: 28px; border: 1px solid var(--line); background: var(--paper); }
+.health-header { display: flex; align-items: start; justify-content: space-between; gap: 32px; }
+.health-header .eyebrow { margin-bottom: 8px; }
+.health-header h2 { margin: 0 0 8px; color: var(--ink); font-size: 32px; line-height: 40px; }
+.health-description { max-width: 520px; margin: 0; color: var(--muted); font-size: 14px; line-height: 22px; }
+.health-score { display: grid; min-width: 110px; gap: 2px; text-align: right; }
+.health-score strong { color: var(--coral-dark); font-size: 36px; line-height: 40px; }
+.health-score span { color: var(--muted); font-size: 11px; font-weight: 700; }
+.health-progress { height: 8px; margin: 24px 0 16px; overflow: hidden; background: var(--sage); }
+.health-progress span { display: block; width: 100%; height: 100%; background: var(--coral); transform-origin: left center; transition: transform 350ms ease; }
+.health-summary { display: flex; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--soft-line); color: var(--muted); font-size: 13px; }
+.health-stat strong { margin-right: 5px; color: var(--ink); font-size: 18px; }
+.health-stat.warning strong { color: var(--coral-dark); }
+.health-empty { margin: 20px 0 0; color: #27664e; font-size: 14px; }
+.health-alerts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; padding-top: 24px; }
+.health-alert-group h3 { margin: 0 0 12px; color: var(--ink); font-size: 16px; line-height: 24px; }
+.health-alert-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.health-alert { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--soft-line); }
+.health-alert strong, .health-alert span, .health-alert p { display: block; }
+.health-alert strong { margin-bottom: 2px; color: var(--ink); font-size: 13px; }
+.health-alert span { color: var(--muted); font-size: 11px; }
+.health-alert p { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 16px; }
+.health-resolve-button { flex: 0 0 auto; min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; }
+.health-resolve-button:hover { color: var(--paper); background: var(--ink); }
+.credential-modal { width: min(620px, calc(100% - 32px)); max-height: calc(100vh - 32px); margin: auto; padding: 28px; border: 1px solid var(--line); background: var(--paper); box-shadow: 0 24px 56px rgba(18, 42, 53, 0.2); }
+.credential-modal::backdrop { background: rgba(18, 42, 53, 0.48); }
+.credential-modal .section-heading { justify-content: space-between; }
+.account-modal { width: min(480px, calc(100% - 32px)); }
+.account-modal .credential-form { max-width: 360px; }
+.modal-cancel-button { margin-top: 8px; }
+.modal-close-button { width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: transparent; cursor: pointer; font-size: 24px; line-height: 1; }
+.modal-close-button:hover { color: var(--paper); background: var(--ink); }
 .section-heading { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 28px; }
 .section-heading h2 { margin: 0; color: var(--ink); font-size: 24px; line-height: 32px; }
 .credential-form label span { float: right; color: var(--muted); font-size: 11px; font-weight: 400; }
@@ -188,6 +221,7 @@ h1, h2, h3 { letter-spacing: -0.045em; }
   .hero-copy h1 { font-size: 64px; }
   .vault-art { min-height: 400px; }
   .vault-layout { grid-template-columns: 1fr; gap: 48px; }
+  .health-alerts { grid-template-columns: 1fr; gap: 24px; }
 }
 @media (max-width: 560px) {
   .landing-page, .auth-page, .app-shell { width: min(100% - 32px, 620px); }
@@ -210,6 +244,12 @@ h1, h2, h3 { letter-spacing: -0.045em; }
   .auth-card { margin: 48px auto; padding: 24px; }
   .auth-card-top { margin-bottom: 48px; }
   .workspace-intro { display: block; padding: 56px 0 40px; }
+  .new-credential-button { width: 100%; }
+  .health-header { display: block; }
+  .health-score { margin-top: 20px; text-align: left; }
+  .health-summary { gap: 16px; }
+  .vault-health { padding: 20px; }
+  .credential-modal { padding: 20px; }
   .credential-item { grid-template-columns: 42px minmax(0, 1fr); }
   .item-actions { grid-column: 1 / -1; justify-content: stretch; padding-left: 58px; }
   .item-actions button { flex: 1; }

@@ -1,4 +1,4 @@
-import { FormEvent, StrictMode, useEffect, useState } from "react";
+import { FormEvent, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   changeMasterPassword,
@@ -24,6 +24,7 @@ import {
   PasswordCharacterOption,
 } from "./password-generator";
 import { getTotpSnapshot } from "./totp";
+import { VaultHealthPanel } from "./VaultHealthPanel";
 
 type View = "login" | "register";
 // Estado inicial reutilizado al abrir el formulario y al limpiar una credencial.
@@ -188,18 +189,47 @@ function PasswordGenerator({
 }
 
 function ChangePasswordPanel({
+  open,
+  onOpen,
+  onClose,
   busy,
   onSubmit,
 }: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   busy: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const modalRef = useRef<HTMLDialogElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+    if (open && !modal.open) modal.showModal();
+    if (!open && modal.open) {
+      modal.close();
+      formRef.current?.reset();
+    }
+  }, [open]);
+
   return (
-    <section className="account-panel" aria-labelledby="change-password-title">
-      <div className="section-heading">
-        <h2 id="change-password-title">Cambiar contraseña maestra</h2>
-      </div>
-      <form className="credential-form" onSubmit={onSubmit}>
+    <section className="account-panel" aria-label="Configuración de la cuenta">
+      <button className="secondary-button" type="button" onClick={onOpen}>
+        Cambiar contraseña maestra
+      </button>
+      <dialog className="credential-modal account-modal" ref={modalRef} onCancel={onClose}>
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Seguridad de la cuenta</p>
+            <h2 id="change-password-title">Cambiar contraseña maestra</h2>
+          </div>
+          <button className="modal-close-button" type="button" onClick={onClose} aria-label="Cerrar modal">
+            ×
+          </button>
+        </div>
+      <form className="credential-form" ref={formRef} onSubmit={onSubmit}>
         <label htmlFor="current-master-password">Contraseña actual</label>
         <input
           id="current-master-password"
@@ -236,6 +266,10 @@ function ChangePasswordPanel({
           {busy ? "Actualizando..." : "Cambiar contraseña"}
         </button>
       </form>
+        <button className="secondary-button modal-cancel-button" type="button" onClick={onClose}>
+          Cancelar
+        </button>
+      </dialog>
     </section>
   );
 }
@@ -520,10 +554,20 @@ function App() {
   >([]);
   const [credential, setCredential] = useState<Credential>(emptyCredential);
   const [editingId, setEditingId] = useState<number | string | null>(null);
+  const [isCredentialModalOpen, setIsCredentialModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const credentialModalRef = useRef<HTMLDialogElement>(null);
   const [revealedId, setRevealedId] = useState<number | string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const modal = credentialModalRef.current;
+    if (!modal) return;
+    if (isCredentialModalOpen && !modal.open) modal.showModal();
+    if (!isCredentialModalOpen && modal.open) modal.close();
+  }, [isCredentialModalOpen]);
 
   /** Registra una cuenta o inicia sesión y carga las credenciales tras desbloquear la bóveda. */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -571,6 +615,8 @@ function App() {
       setCredentials([]);
       setCredential(emptyCredential);
       setEditingId(null);
+      setIsCredentialModalOpen(false);
+      setIsChangePasswordModalOpen(false);
       setRevealedId(null);
       setBusy(false);
     }
@@ -593,11 +639,12 @@ function App() {
       setCredentials([]);
       setCredential(emptyCredential);
       setEditingId(null);
+      setIsChangePasswordModalOpen(false);
       setRevealedId(null);
       setView("login");
       setShowAccess(true);
       setMessage("Contraseña actualizada. Inicia sesión de nuevo.");
-      event.currentTarget.reset();
+      setIsChangePasswordModalOpen(false);
     } catch (changeError) {
       setError(
         changeError instanceof Error
@@ -648,6 +695,7 @@ function App() {
       }
       setCredential(emptyCredential);
       setEditingId(null);
+      setIsCredentialModalOpen(false);
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -657,6 +705,34 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+  function closeCredentialModal() {
+    setIsCredentialModalOpen(false);
+    setEditingId(null);
+    setCredential(emptyCredential);
+    setError("");
+  }
+  function closeChangePasswordModal() {
+    setIsChangePasswordModalOpen(false);
+    setError("");
+  }
+  function openChangePasswordModal() {
+    setError("");
+    setIsChangePasswordModalOpen(true);
+  }
+  function openNewCredentialModal() {
+    setEditingId(null);
+    setCredential(emptyCredential);
+    setError("");
+    setIsCredentialModalOpen(true);
+  }
+  function openEditCredentialModal(id: number | string) {
+    const selectedCredential = credentials.find((item) => item.id === id);
+    if (!selectedCredential) return;
+    setEditingId(id);
+    setCredential(selectedCredential);
+    setError("");
+    setIsCredentialModalOpen(true);
   }
   /** Elimina una credencial en el servidor y sincroniza la lista local. */
   async function handleDelete(id: number | string) {
@@ -743,14 +819,27 @@ function App() {
       </header>
       <section className="workspace-intro" aria-labelledby="vault-title">
         <h1 id="vault-title">Bóveda desbloqueada.</h1>
+        <button className="primary-button new-credential-button" type="button" onClick={openNewCredentialModal}>
+          + Nueva credencial
+        </button>
       </section>
-      <ChangePasswordPanel busy={busy} onSubmit={handleChangePassword} />
+      <ChangePasswordPanel
+        open={isChangePasswordModalOpen}
+        onOpen={openChangePasswordModal}
+        onClose={closeChangePasswordModal}
+        busy={busy}
+        onSubmit={handleChangePassword}
+      />
+      <VaultHealthPanel credentials={credentials} onEdit={openEditCredentialModal} />
       <div className="vault-layout">
-        <section className="vault-composer" aria-labelledby="composer-title">
+        <dialog className="credential-modal" ref={credentialModalRef} onCancel={closeCredentialModal}>
           <div className="section-heading">
             <h2 id="composer-title">
               {editingId === null ? "Guardar un acceso" : "Actualizar acceso"}
             </h2>
+            <button className="modal-close-button" type="button" onClick={closeCredentialModal} aria-label="Cerrar modal">
+              ×
+            </button>
           </div>
           <form className="credential-form" onSubmit={handleCredentialSubmit}>
             <label htmlFor="credential-title">Nombre</label>
@@ -834,21 +923,12 @@ function App() {
               <button className="primary-button" type="submit" disabled={busy}>
                 {editingId === null ? "Guardar acceso" : "Guardar cambios"}
               </button>
-              {editingId !== null && (
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => {
-                    setEditingId(null);
-                    setCredential(emptyCredential);
-                  }}
-                >
-                  Cancelar
-                </button>
-              )}
+              <button className="secondary-button" type="button" onClick={closeCredentialModal}>
+                Cancelar
+              </button>
             </div>
           </form>
-        </section>
+        </dialog>
         <section
           className="credential-list"
           aria-live="polite"
@@ -903,10 +983,7 @@ function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditingId(item.id);
-                    setCredential(item);
-                  }}
+                  onClick={() => openEditCredentialModal(item.id)}
                 >
                   Editar
                 </button>
