@@ -34,5 +34,8 @@ describe('form validation limits', () => {
     expect(validateCredential({ ...valid, urls: ['https://github.com', 'https://gitlab.com'] })).toBeNull();
     expect(validateCredential({ ...valid, urls: [] })).toBeTruthy();
     expect(validateCredential({ ...valid, urls: Array(FIELD_LIMITS.maxUrls + 1).fill('https://example.com') })).toBeTruthy();
+    expect(validateCredential({ ...valid, totpSecret: 'JBSW Y3DP EHPK 3PXP' })).toBeNull();
+    expect(validateCredential({ ...valid, totpSecret: 'otpauth://totp/Arca:demo?secret=JBSWY3DPEHPK3PXP' })).toBeNull();
+    expect(validateCredential({ ...valid, totpSecret: 'not-valid' })).toBeTruthy();
   });
 });

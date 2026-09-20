@@ -3,12 +3,14 @@ import { decryptItem, encryptItem } from './crypto/cipher.js';
 import { createVaultItem, deleteVaultItem, getVaultItems, updateVaultItem } from './api';
 import { getVaultKey } from './auth';
 import { validateCredential } from './validation';
+import { normalizeTotpSecret } from './totp';
 
 export interface Credential {
   title: string;
   username: string;
   password: string;
   urls: string[];
+  totpSecret?: string;
 }
 
 export interface DecryptedCredential extends Credential {
@@ -17,11 +19,13 @@ export interface DecryptedCredential extends Credential {
 
 /** Normaliza credenciales antiguas sin modificar su cifrado ni su contenido sensible. */
 function normalizeCredential(value: Credential & { url?: string }): Credential {
+  const totpSecret = value.totpSecret ? normalizeTotpSecret(value.totpSecret) : '';
   return {
     title: value.title,
     username: value.username,
     password: value.password,
     urls: Array.isArray(value.urls) ? value.urls : value.url ? [value.url] : [],
+    ...(totpSecret ? { totpSecret } : {}),
   };
 }
 

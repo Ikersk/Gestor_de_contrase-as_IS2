@@ -54,6 +54,7 @@ describe('client cryptography', () => {
       username: 'ana@example.test',
       password: 'CONTRASEÑA_DE_PRUEBA_XYZ',
       urls: ['https://mail.example.test', 'https://webmail.example.test'],
+      totpSecret: 'JBSWY3DPEHPK3PXP',
     };
 
     const encrypted = await encryptItem(vaultKey, entry);

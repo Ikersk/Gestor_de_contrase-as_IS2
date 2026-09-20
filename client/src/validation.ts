@@ -1,10 +1,13 @@
 // Mantiene los límites de la interfaz alineados con el tamaño esperado por el protocolo.
+import { isValidTotpSecret, normalizeTotpSecret } from './totp';
+
 export const FIELD_LIMITS = {
   email: 40,
   masterPassword: 42,
   title: 30,
   username: 30,
   password: 32,
+  totpSecret: 128,
   url: 100,
   maxUrls: 8,
 } as const;
@@ -17,6 +20,7 @@ export interface ValidatableCredential {
   username: string;
   password: string;
   urls: string[];
+  totpSecret?: string;
 }
 
 /** Valida campos obligatorios y, cuando procede, evita valores compuestos solo por símbolos. */
@@ -53,6 +57,13 @@ export function validateCredential(credential: ValidatableCredential) {
   ];
   const firstError = checks.find(Boolean);
   if (firstError) return firstError;
+
+  if (credential.totpSecret && credential.totpSecret.length > FIELD_LIMITS.totpSecret) {
+    return `El secreto TOTP no puede superar ${FIELD_LIMITS.totpSecret} caracteres`;
+  }
+  if (credential.totpSecret && !isValidTotpSecret(credential.totpSecret)) {
+    return 'Introduce un secreto TOTP Base32 válido o una URI otpauth válida';
+  }
 
   if (!Array.isArray(credential.urls) || credential.urls.length === 0) {
     return 'Añade al menos una URL';

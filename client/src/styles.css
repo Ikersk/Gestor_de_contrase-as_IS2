@@ -157,6 +157,17 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 .credential-details p, .credential-details a { overflow-wrap: anywhere; color: var(--muted); font-size: 12px; }
 .credential-details a { display: block; margin-bottom: 8px; }
 .password-preview { width: min(100%, 240px); min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: var(--cream); outline: none; }
+.totp-panel { width: min(100%, 280px); margin-top: 12px; padding: 12px; border: 1px solid var(--soft-line); background: var(--cream); }
+.totp-panel-heading { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.totp-panel-heading span:last-child { color: var(--coral-dark); font-variant-numeric: tabular-nums; }
+.totp-code-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.totp-code { color: var(--ink); font-family: 'Manrope', 'Segoe UI', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: 0.12em; line-height: 32px; }
+.totp-copy-button { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: var(--paper); cursor: pointer; font-size: 11px; font-weight: 700; }
+.totp-copy-button:hover { color: var(--paper); background: var(--ink); }
+.totp-progress { height: 4px; margin-top: 10px; overflow: hidden; background: rgba(18, 42, 53, 0.12); }
+.totp-progress span { display: block; width: 100%; height: 100%; background: var(--coral); transform-origin: left center; transition: transform 200ms linear; }
+.totp-error, .totp-loading { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 16px; }
+.totp-error { color: #a13d2d; }
 .item-actions { display: flex; justify-content: end; gap: 6px; flex-wrap: wrap; }
 .item-actions button { min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; }
 .item-actions button:hover { color: var(--paper); background: var(--ink); }

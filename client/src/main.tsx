@@ -1,4 +1,4 @@
-import { FormEvent, StrictMode, useState } from "react";
+import { FormEvent, StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   changeMasterPassword,
@@ -23,6 +23,7 @@ import {
   PASSWORD_GENERATOR_MIN_LENGTH,
   PasswordCharacterOption,
 } from "./password-generator";
+import { getTotpSnapshot } from "./totp";
 
 type View = "login" | "register";
 // Estado inicial reutilizado al abrir el formulario y al limpiar una credencial.
@@ -32,6 +33,72 @@ const emptyCredential: Credential = {
   password: "",
   urls: [""],
 };
+
+function TotpCode({ secret }: { secret: string }) {
+  const [snapshot, setSnapshot] = useState<ReturnType<typeof getTotpSnapshot> | null>(null);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    function refresh() {
+      try {
+        const nextSnapshot = getTotpSnapshot(secret);
+        if (active) {
+          setSnapshot(nextSnapshot);
+          setError("");
+          setCopied(false);
+        }
+      } catch {
+        if (active) setError("No se pudo calcular el código TOTP");
+      }
+    }
+
+    refresh();
+    const intervalId = window.setInterval(refresh, 1000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [secret]);
+
+  async function copyCode() {
+    if (!snapshot || !navigator.clipboard) {
+      setError("El navegador no permite copiar el código");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(snapshot.code);
+      setCopied(true);
+    } catch {
+      setError("No se pudo copiar el código");
+    }
+  }
+
+  if (error) return <p className="totp-error" role="status">{error}</p>;
+  if (!snapshot) return <p className="totp-loading" role="status">Calculando código...</p>;
+
+  return (
+    <div className="totp-panel" aria-label="Código de autenticación de dos factores">
+      <div className="totp-panel-heading">
+        <span>Código 2FA</span>
+        <span>{snapshot.remainingSeconds}s</span>
+      </div>
+      <div className="totp-code-row">
+        <output className="totp-code" aria-live="polite" aria-label="Código TOTP">
+          {snapshot.code}
+        </output>
+        <button className="totp-copy-button" type="button" onClick={copyCode}>
+          {copied ? "Copiado" : "Copiar"}
+        </button>
+      </div>
+      <div className="totp-progress" role="progressbar" aria-label="Tiempo restante del código" aria-valuemin={0} aria-valuemax={30} aria-valuenow={snapshot.remainingSeconds}>
+        <span style={{ transform: `scaleX(${snapshot.progress})` }} />
+      </div>
+    </div>
+  );
+}
 
 const passwordCharacterLabels: Record<PasswordCharacterOption, string> = {
   uppercase: "Mayúsculas",
@@ -725,6 +792,19 @@ function App() {
             <PasswordGenerator
               onGenerate={(password) => setCredential({ ...credential, password })}
             />
+            <label htmlFor="credential-totp-secret">
+              Secreto TOTP / 2FA <span>Opcional</span>
+            </label>
+            <input
+              id="credential-totp-secret"
+              maxLength={FIELD_LIMITS.totpSecret}
+              autoComplete="off"
+              placeholder="Base32 o URI otpauth://"
+              value={credential.totpSecret ?? ""}
+              onChange={(event) =>
+                setCredential({ ...credential, totpSecret: event.target.value })
+              }
+            />
             <fieldset className="url-fields">
               <legend>URLs</legend>
               {credential.urls.map((url, index) => (
@@ -810,6 +890,7 @@ function App() {
                   readOnly
                   aria-label={`Contraseña de ${item.title}`}
                 />
+                {item.totpSecret && <TotpCode secret={item.totpSecret} />}
               </div>
               <div className="item-actions">
                 <button

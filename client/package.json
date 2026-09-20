@@ -11,13 +11,14 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "otpauth": "^9.5.2",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "@types/node": "latest",
     "typescript": "latest",
     "vite": "latest",
     "vitest": "latest"
