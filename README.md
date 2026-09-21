@@ -44,8 +44,8 @@ credenciales para la cookie de sesion. El backend tambien envia una CSP estricta
 mediante Helmet.
 
 Los formularios limitan el correo a 40 caracteres, la contrasena maestra a 42,
-el nombre de credencial a 30, el usuario a 30, la contrasena guardada a 32 y la
-URL a 100. Nombre y usuario deben contener al menos una letra. Las credenciales
+el nombre de credencial a 30, el usuario a 30, cada URL a 100 y permiten hasta
+8 URLs por credencial. Nombre y usuario deben contener al menos una letra. Las credenciales
 se validan en el cliente antes de cifrarse; el backend limita ademas el cuerpo
 JSON y los blobs cifrados.
 
@@ -56,6 +56,23 @@ abierta.
 
 Con la sesion abierta puedes crear, editar y borrar credenciales desde la
 interfaz. Cada item se cifra en el cliente antes de enviarse a `/api/vault`.
+
+El formulario de credenciales se abre en un modal único para crear y editar
+accesos. El botón `+ Nueva credencial` inicia un formulario vacío; las acciones
+`Editar` y `Resolver` cargan el acceso correspondiente. El generador de
+contraseñas usa aleatoriedad criptográfica del navegador y el valor se cifra
+antes de guardarse.
+
+La sección **Salud de la Bóveda** analiza únicamente el array de credenciales
+ya descifradas en la memoria del cliente. Detecta reutilización y contraseñas
+débiles mediante una estimación local de longitud y diversidad, y muestra un
+puntaje de 0 a 100. Esta auditoría no realiza peticiones ni envía contraseñas
+al servidor. Cada alerta permite abrir el modal de edición para resolverla.
+
+El cambio de contraseña maestra se inicia con el botón correspondiente en la
+bóveda y se realiza dentro de una ventana modal. Al cancelar o cerrar, sus
+campos se limpian. Tras completarlo, se rota el material derivado, se invalida
+la sesión actual y la aplicación solicita iniciar sesión de nuevo.
 
 ## Cliente
 

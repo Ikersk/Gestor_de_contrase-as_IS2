@@ -21,7 +21,7 @@ describe('form validation limits', () => {
   });
 
   it('limits credential fields and only accepts HTTP URLs', () => {
-    const valid = { title: 'GitHub', username: 'alice', password: 'secret', url: 'https://github.com' };
+    const valid = { title: 'GitHub', username: 'alice', password: 'secret', urls: ['https://github.com'] };
     expect(validateCredential(valid)).toBeNull();
     expect(validateCredential({ ...valid, title: '' })).toBeTruthy();
     expect(validateCredential({ ...valid, title: '123456' })).toBeTruthy();
@@ -29,7 +29,13 @@ describe('form validation limits', () => {
     expect(validateCredential({ ...valid, username: 'user_123' })).toBeNull();
     expect(validateCredential({ ...valid, password: '123456!' })).toBeNull();
     expect(validateCredential({ ...valid, title: 'a'.repeat(FIELD_LIMITS.title + 1) })).toBeTruthy();
-    expect(validateCredential({ ...valid, url: 'javascript:alert(1)' })).toBeTruthy();
-    expect(validateCredential({ ...valid, url: 'https://' })).toBeTruthy();
+    expect(validateCredential({ ...valid, urls: ['javascript:alert(1)'] })).toBeTruthy();
+    expect(validateCredential({ ...valid, urls: ['https://'] })).toBeTruthy();
+    expect(validateCredential({ ...valid, urls: ['https://github.com', 'https://gitlab.com'] })).toBeNull();
+    expect(validateCredential({ ...valid, urls: [] })).toBeTruthy();
+    expect(validateCredential({ ...valid, urls: Array(FIELD_LIMITS.maxUrls + 1).fill('https://example.com') })).toBeTruthy();
+    expect(validateCredential({ ...valid, totpSecret: 'JBSW Y3DP EHPK 3PXP' })).toBeNull();
+    expect(validateCredential({ ...valid, totpSecret: 'otpauth://totp/Arca:demo?secret=JBSWY3DPEHPK3PXP' })).toBeNull();
+    expect(validateCredential({ ...valid, totpSecret: 'not-valid' })).toBeTruthy();
   });
 });

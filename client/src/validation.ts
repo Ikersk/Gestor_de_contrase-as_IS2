@@ -1,11 +1,15 @@
 // Mantiene los límites de la interfaz alineados con el tamaño esperado por el protocolo.
+import { isValidTotpSecret, normalizeTotpSecret } from './totp';
+
 export const FIELD_LIMITS = {
   email: 40,
   masterPassword: 42,
   title: 30,
   username: 30,
   password: 32,
+  totpSecret: 128,
   url: 100,
+  maxUrls: 8,
 } as const;
 
 // Comprueba una forma básica de correo sin intentar implementar toda la especificación RFC.
@@ -15,7 +19,8 @@ export interface ValidatableCredential {
   title: string;
   username: string;
   password: string;
-  url: string;
+  urls: string[];
+  totpSecret?: string;
 }
 
 /** Valida campos obligatorios y, cuando procede, evita valores compuestos solo por símbolos. */
@@ -53,17 +58,28 @@ export function validateCredential(credential: ValidatableCredential) {
   const firstError = checks.find(Boolean);
   if (firstError) return firstError;
 
-  if (credential.url.length > FIELD_LIMITS.url) {
-    return `La URL no puede superar ${FIELD_LIMITS.url} caracteres`;
+  if (credential.totpSecret && credential.totpSecret.length > FIELD_LIMITS.totpSecret) {
+    return `El secreto TOTP no puede superar ${FIELD_LIMITS.totpSecret} caracteres`;
   }
-  if (credential.url) {
+  if (credential.totpSecret && !isValidTotpSecret(credential.totpSecret)) {
+    return 'Introduce un secreto TOTP Base32 válido o una URI otpauth válida';
+  }
+
+  if (credential.urls.length > FIELD_LIMITS.maxUrls) {
+    return `No puedes añadir más de ${FIELD_LIMITS.maxUrls} URLs`;
+  }
+  for (const url of credential.urls) {
+    if (!url) continue;
+    if (url.length > FIELD_LIMITS.url) {
+      return `Cada URL debe tener entre 1 y ${FIELD_LIMITS.url} caracteres`;
+    }
     try {
-      const parsedUrl = new URL(credential.url);
+      const parsedUrl = new URL(url);
       if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-        return 'La URL debe comenzar por http:// o https://';
+        return 'Las URLs deben comenzar por http:// o https://';
       }
     } catch {
-      return 'Introduce una URL valida';
+      return 'Introduce URLs validas';
     }
   }
   return null;
