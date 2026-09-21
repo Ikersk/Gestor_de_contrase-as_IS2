@@ -96,6 +96,14 @@ export function logoutAccount() {
   return request<void>('/auth/logout', { method: 'POST' });
 }
 
+/** Elimina la cuenta activa y todo su contenido en el servidor. */
+export function deleteAccount(payload: { authHash: string }) {
+  return request<void>('/auth/account', {
+    method: 'DELETE',
+    body: JSON.stringify(payload),
+  });
+}
+
 /** Recupera los blobs cifrados de la cuenta activa; nunca devuelve texto plano. */
 export function getVaultItems() {
   return request<VaultItemResponse[]>('/vault');

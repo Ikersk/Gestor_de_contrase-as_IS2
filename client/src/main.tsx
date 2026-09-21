@@ -2,6 +2,7 @@ import { FormEvent, StrictMode, useCallback, useEffect, useMemo, useRef, useStat
 import { createRoot } from "react-dom/client";
 import {
   changeMasterPassword,
+  deleteAccountFromPassword,
   loginWithMasterPassword,
   logoutFromMemory,
   registerWithMasterPassword,
@@ -25,7 +26,10 @@ import {
 } from "./password-generator";
 import { getTotpSnapshot } from "./totp";
 import { auditVault } from "./vault-health";
-import { VaultHealthPanel } from "./VaultHealthPanel";
+import type { VaultHealthAlert } from "./vault-health";
+import { checkCredentialsBreach } from "./hibp";
+import { SecurityDashboard } from "./SecurityDashboard";
+import { CredentialDetail } from "./CredentialDetail";
 
 type View = "login" | "register";
 type Toast = { id: number; message: string; type: "success" | "error"; exiting?: boolean };
@@ -261,18 +265,26 @@ function PasswordGenerator({
   );
 }
 
-function ChangePasswordPanel({
+function AccountModal({
   open,
-  onOpen,
   onClose,
   busy,
-  onSubmit,
+  onSubmitPassword,
+  deletePassword,
+  onDeletePasswordChange,
+  onDeleteConfirm,
+  isDeleting,
+  deleteError,
 }: {
   open: boolean;
-  onOpen: () => void;
   onClose: () => void;
   busy: boolean;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmitPassword: (event: FormEvent<HTMLFormElement>) => void;
+  deletePassword: string;
+  onDeletePasswordChange: (value: string) => void;
+  onDeleteConfirm: () => void;
+  isDeleting: boolean;
+  deleteError: string | null;
 }) {
   const modalRef = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -288,62 +300,109 @@ function ChangePasswordPanel({
   }, [open]);
 
   return (
-    <section className="account-panel" aria-label="Configuración de la cuenta">
-      <button className="secondary-button" type="button" onClick={onOpen}>
-        Cambiar contraseña maestra
-      </button>
-      <dialog className="credential-modal account-modal" ref={modalRef} onCancel={onClose}>
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Seguridad de la cuenta</p>
-            <h2 id="change-password-title">Cambiar contraseña maestra</h2>
-          </div>
-          <button className="modal-close-button" type="button" onClick={onClose} aria-label="Cerrar modal">
-            ×
-          </button>
+    <dialog className="credential-modal account-modal" ref={modalRef} onCancel={onClose}>
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Ajustes de seguridad</p>
+          <h2 id="account-modal-title">Mi Cuenta</h2>
         </div>
-      <form className="credential-form" ref={formRef} onSubmit={onSubmit}>
-        <label htmlFor="current-master-password">Contraseña actual</label>
-        <input
-          id="current-master-password"
-          name="currentPassword"
-          type="password"
-          autoComplete="current-password"
-          minLength={12}
-          maxLength={FIELD_LIMITS.masterPassword}
-          required
-        />
-        <label htmlFor="new-master-password">Nueva contraseña</label>
-        <input
-          id="new-master-password"
-          name="newPassword"
-          type="password"
-          autoComplete="new-password"
-          minLength={12}
-          maxLength={FIELD_LIMITS.masterPassword}
-          required
-        />
-        <label htmlFor="confirm-master-password">
-          Confirmar nueva contraseña
-        </label>
-        <input
-          id="confirm-master-password"
-          name="confirmPassword"
-          type="password"
-          autoComplete="new-password"
-          minLength={12}
-          maxLength={FIELD_LIMITS.masterPassword}
-          required
-        />
-        <button className="primary-button" type="submit" disabled={busy}>
-          {busy ? "Actualizando..." : "Cambiar contraseña"}
+        <button className="modal-close-button" type="button" onClick={onClose} aria-label="Cerrar modal">
+          ×
         </button>
-      </form>
-        <button className="secondary-button modal-cancel-button" type="button" onClick={onClose}>
-          Cancelar
-        </button>
-      </dialog>
-    </section>
+      </div>
+
+      <div className="account-section">
+        <h3 className="account-section-title">Cambiar contraseña maestra</h3>
+        <form className="credential-form" ref={formRef} onSubmit={onSubmitPassword}>
+          <label htmlFor="current-master-password">Contraseña actual</label>
+          <input
+            id="current-master-password"
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            minLength={12}
+            maxLength={FIELD_LIMITS.masterPassword}
+            required
+          />
+          <label htmlFor="new-master-password">Nueva contraseña</label>
+          <input
+            id="new-master-password"
+            name="newPassword"
+            type="password"
+            autoComplete="new-password"
+            minLength={12}
+            maxLength={FIELD_LIMITS.masterPassword}
+            required
+          />
+          <label htmlFor="confirm-master-password">
+            Confirmar nueva contraseña
+          </label>
+          <input
+            id="confirm-master-password"
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            minLength={12}
+            maxLength={FIELD_LIMITS.masterPassword}
+            required
+          />
+          <button className="primary-button" type="submit" disabled={busy}>
+            {busy ? "Actualizando..." : "Cambiar contraseña"}
+          </button>
+        </form>
+      </div>
+
+      <div className="account-section danger-zone">
+        <h3 className="danger-zone-title">Zona de Peligro</h3>
+        <p className="danger-zone-description">
+          Eliminar tu cuenta borrará permanentemente todos tus datos cifrados.
+          Esta acción no se puede deshacer.
+        </p>
+        {deletePassword !== "" ? (
+          <div className="delete-confirm-field">
+            <label htmlFor="delete-confirm-password">
+              Escribe tu contraseña actual para confirmar
+            </label>
+            <input
+              id="delete-confirm-password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Contraseña actual"
+              value={deletePassword}
+              onChange={(e) => onDeletePasswordChange(e.target.value)}
+              minLength={12}
+              maxLength={FIELD_LIMITS.masterPassword}
+            />
+            {deleteError && <p className="breach-error">{deleteError}</p>}
+            <div className="confirm-actions">
+              <button
+                className="primary-button delete-confirm-button"
+                type="button"
+                onClick={onDeleteConfirm}
+                disabled={isDeleting || deletePassword.length < 12}
+              >
+                {isDeleting ? "Eliminando..." : "Eliminar cuenta permanentemente"}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => onDeletePasswordChange("")}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            className="secondary-button delete-account-trigger"
+            type="button"
+            onClick={() => onDeletePasswordChange(" ")}
+          >
+            Eliminar Cuenta
+          </button>
+        )}
+      </div>
+    </dialog>
   );
 }
 
@@ -785,16 +844,22 @@ function App() {
   const [credential, setCredential] = useState<Credential>(emptyCredential);
   const [editingId, setEditingId] = useState<number | string | null>(null);
   const [isCredentialModalOpen, setIsCredentialModalOpen] = useState(false);
-  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const credentialModalRef = useRef<HTMLDialogElement>(null);
   const deleteConfirmModalRef = useRef<HTMLDialogElement>(null);
-  const [revealedId, setRevealedId] = useState<number | string | null>(null);
   const [deletingId, setDeletingId] = useState<number | string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
+  const [selectedCredentialId, setSelectedCredentialId] = useState<number | string | null>(null);
+  const [breachedAlerts, setBreachedAlerts] = useState<VaultHealthAlert[]>([]);
+  const [isCheckingBreach, setIsCheckingBreach] = useState(false);
+  const [checkedCount, setCheckedCount] = useState(0);
+  const [breachError, setBreachError] = useState<string | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   function addToast(msg: string, type: Toast["type"] = "success") {
     const id = ++toastIdRef.current;
@@ -807,7 +872,7 @@ function App() {
     }, 3000);
   }
 
-  const healthReport = useMemo(() => auditVault(credentials), [credentials]);
+  const healthReport = useMemo(() => auditVault(credentials, breachedAlerts), [credentials, breachedAlerts]);
   const affectedIds = useMemo(() => {
     const ids = new Set<number | string>();
     for (const alert of healthReport.reused) ids.add(alert.id);
@@ -820,6 +885,23 @@ function App() {
     for (const alert of healthReport.breached) ids.add(alert.id);
     return ids;
   }, [healthReport]);
+
+  async function handleCheckBreach() {
+    setIsCheckingBreach(true);
+    setCheckedCount(0);
+    setBreachError(null);
+
+    try {
+      const alerts = await checkCredentialsBreach(credentials, (checked) => {
+        setCheckedCount(checked);
+      });
+      setBreachedAlerts(alerts);
+    } catch {
+      setBreachError("No se pudo conectar con Have I Been Pwned. Inténtalo de nuevo.");
+    } finally {
+      setIsCheckingBreach(false);
+    }
+  }
 
   useEffect(() => {
     const modal = credentialModalRef.current;
@@ -885,9 +967,13 @@ function App() {
       setCredential(emptyCredential);
       setEditingId(null);
       setIsCredentialModalOpen(false);
-      setIsChangePasswordModalOpen(false);
-      setRevealedId(null);
+      setIsAccountModalOpen(false);
       setDeletingId(null);
+      setBreachedAlerts([]);
+      setIsCheckingBreach(false);
+      setCheckedCount(0);
+      setBreachError(null);
+      setSelectedCredentialId(null);
       setBusy(false);
     }
   }
@@ -910,12 +996,10 @@ function App() {
       setCredentials([]);
       setCredential(emptyCredential);
       setEditingId(null);
-      setIsChangePasswordModalOpen(false);
-      setRevealedId(null);
+      setIsAccountModalOpen(false);
       setView("login");
       setShowAccess(true);
       setMessage("Contraseña actualizada. Inicia sesión de nuevo.");
-      setIsChangePasswordModalOpen(false);
     } catch (changeError) {
       setError(
         changeError instanceof Error
@@ -924,6 +1008,33 @@ function App() {
       );
     } finally {
       setBusy(false);
+    }
+  }
+  async function handleDeleteAccount() {
+    setIsDeletingAccount(true);
+    setError("");
+    try {
+      await deleteAccountFromPassword(deletePassword);
+      localStorage.clear();
+      setAuthenticated(false);
+      setDecrypting(false);
+      setCredentials([]);
+      setCredential(emptyCredential);
+      setEditingId(null);
+      setIsAccountModalOpen(false);
+      setSelectedCredentialId(null);
+      setDeletePassword("");
+      setView("login");
+      setShowAccess(true);
+      addToast("Cuenta eliminada permanentemente.", "success");
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "No se pudo eliminar la cuenta",
+      );
+    } finally {
+      setIsDeletingAccount(false);
     }
   }
   function updateCredentialUrl(index: number, value: string) {
@@ -983,13 +1094,15 @@ function App() {
     setCredential(emptyCredential);
     setError("");
   }
-  function closeChangePasswordModal() {
-    setIsChangePasswordModalOpen(false);
+  function closeAccountModal() {
+    setIsAccountModalOpen(false);
     setError("");
+    setDeletePassword("");
   }
-  function openChangePasswordModal() {
+  function openAccountModal() {
     setError("");
-    setIsChangePasswordModalOpen(true);
+    setDeletePassword("");
+    setIsAccountModalOpen(true);
   }
   function openNewCredentialModal() {
     setEditingId(null);
@@ -1098,21 +1211,115 @@ function App() {
       {decrypting ? (
         <VaultSkeleton />
       ) : (<>
-      <section className="workspace-intro" aria-labelledby="vault-title">
-        <h1 id="vault-title">Bóveda desbloqueada.</h1>
-        <button className="primary-button new-credential-button" type="button" onClick={openNewCredentialModal}>
-          + Nueva credencial
-        </button>
-      </section>
-      <ChangePasswordPanel
-        open={isChangePasswordModalOpen}
-        onOpen={openChangePasswordModal}
-        onClose={closeChangePasswordModal}
-        busy={busy}
-        onSubmit={handleChangePassword}
+      <SecurityDashboard
+        credentials={credentials}
+        healthReport={healthReport}
+        breachedCount={breachedIds.size}
+        isChecking={isCheckingBreach}
+        checkedCount={checkedCount}
+        breachError={breachError}
+        onCheckBreach={handleCheckBreach}
       />
-      <VaultHealthPanel credentials={credentials} onEdit={openEditCredentialModal} />
-      <div className="vault-layout">
+      <div className="vault-split-container">
+        <section className="credential-list-panel" aria-label="Lista de credenciales">
+          <div className="credential-list-header">
+            <div className="credential-search-wrapper">
+              <svg className="credential-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                className="credential-search-input"
+                type="text"
+                placeholder="Buscar credenciales..."
+                aria-label="Buscar credenciales"
+              />
+            </div>
+            <button className="credential-add-button" type="button" onClick={openNewCredentialModal}>
+              + Nueva
+            </button>
+          </div>
+          <div className="credential-items-list">
+            {credentials.length === 0 && (
+              <div className="credential-list-empty">
+                <div className="credential-list-empty-icon">+</div>
+                <p>Añade tu primer acceso para tenerlo disponible cuando lo necesites.</p>
+              </div>
+            )}
+            {credentials.map((item) => {
+              const firstUrl = item.urls.find((u) => u.length > 0);
+              const faviconUrl = firstUrl ? getFaviconUrl(firstUrl) : null;
+              const isAffected = affectedIds.has(item.id);
+              const isBreached = breachedIds.has(item.id);
+              const hasTotp = Boolean(item.totpSecret);
+              const isSelected = selectedCredentialId === item.id;
+
+              return (
+                <button
+                  className={`credential-item ${isSelected ? "credential-item--active" : ""} ${isAffected ? "credential-item--affected" : ""}`}
+                  type="button"
+                  key={item.id}
+                  onClick={() => setSelectedCredentialId(item.id)}
+                >
+                  <div className="credential-item-avatar">
+                    {faviconUrl ? (
+                      <img
+                        className="credential-item-favicon"
+                        src={faviconUrl}
+                        alt=""
+                        width="24"
+                        height="24"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : null}
+                    <span className={`credential-item-avatar-fallback ${faviconUrl ? "credential-item-avatar-fallback--hidden" : ""}`}>
+                      {item.title.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="credential-item-content">
+                    <span className="credential-item-title">{item.title}</span>
+                    <span className="credential-item-username">{item.username}</span>
+                  </div>
+                  <div className="credential-item-badges">
+                    {hasTotp && <span className="credential-item-badge credential-item-badge--2fa">2FA</span>}
+                    {isBreached && <span className="credential-item-badge credential-item-badge--breach">!</span>}
+                    {!isBreached && isAffected && <span className="credential-item-badge credential-item-badge--weak">!</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="sidebar-footer">
+            <button className="sidebar-account-button" type="button" onClick={openAccountModal}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              Mi Cuenta
+            </button>
+          </div>
+        </section>
+        <section className="credential-detail-panel" aria-label="Detalle de credencial">
+          <CredentialDetail
+            credential={credentials.find(c => c.id === selectedCredentialId) ?? null}
+            onEdit={openEditCredentialModal}
+            onDelete={(id) => setDeletingId(id)}
+            breachedIds={breachedIds}
+            busy={busy}
+          />
+        </section>
+      </div>
+      <AccountModal
+        open={isAccountModalOpen}
+        onClose={closeAccountModal}
+        busy={busy}
+        onSubmitPassword={handleChangePassword}
+        deletePassword={deletePassword}
+        onDeletePasswordChange={setDeletePassword}
+        onDeleteConfirm={handleDeleteAccount}
+        isDeleting={isDeletingAccount}
+        deleteError={error}
+      />
         <dialog className="credential-modal" ref={credentialModalRef} onCancel={closeCredentialModal}>
           <div className="section-heading">
             <h2 id="composer-title">
@@ -1209,134 +1416,6 @@ function App() {
             </div>
           </form>
         </dialog>
-        <section
-          className="credential-list"
-          aria-live="polite"
-          aria-labelledby="list-title"
-        >
-          <div className="section-heading list-heading">
-            <h2 id="list-title">
-              {credentials.length === 0
-                ? "Tu bóveda empieza aquí"
-                : "Accesos guardados"}
-            </h2>
-          </div>
-          {credentials.length === 0 && (
-            <div className="empty-state">
-              <div className="empty-glyph">+</div>
-              <p>
-                Añade tu primer acceso para tenerlo disponible cuando lo
-                necesites, sin exponerlo al servidor.
-              </p>
-            </div>
-          )}
-          {credentials.map((item) => {
-            const firstUrl = item.urls.find((u) => u.length > 0);
-            const faviconUrl = firstUrl ? getFaviconUrl(firstUrl) : null;
-            const isAffected = affectedIds.has(item.id);
-            const isBreached = breachedIds.has(item.id);
-            const hasTotp = Boolean(item.totpSecret);
-
-            return (
-              <article className={`credential-card${isAffected ? " credential-card--affected" : ""}`} key={item.id}>
-                <div className="credential-card-header">
-                  <div className="credential-avatar">
-                    {faviconUrl ? (
-                      <img
-                        className="credential-favicon"
-                        src={faviconUrl}
-                        alt=""
-                        width="20"
-                        height="20"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                      />
-                    ) : null}
-                    <span className={`credential-avatar-fallback${faviconUrl ? " credential-avatar-fallback--hidden" : ""}`}>
-                      {item.title.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="credential-title-group">
-                    <h3>{item.title}</h3>
-                    <div className="credential-badges">
-                      {hasTotp && (
-                        <span className="badge badge--2fa">2FA</span>
-                      )}
-                      {isBreached && (
-                        <span className="badge badge--breach">Comprometida</span>
-                      )}
-                      {!isBreached && isAffected && (
-                        <span className="badge badge--weak">Débil</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="item-actions">
-                    <button
-                      className="action-button"
-                      type="button"
-                      onClick={async () => { if (await copyToClipboard(item.username)) addToast("Usuario copiado"); }}
-                      title="Copiar usuario"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    </button>
-                    <button
-                      className="action-button"
-                      type="button"
-                      onClick={() => setRevealedId(revealedId === item.id ? null : item.id)}
-                      title={revealedId === item.id ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{revealedId === item.id ? (<><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>) : (<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>)}</svg>
-                    </button>
-                    <button
-                      className="action-button"
-                      type="button"
-                      onClick={async () => { if (await copyToClipboard(item.password)) addToast("Contraseña copiada"); }}
-                      title="Copiar contraseña"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
-                    <button
-                      className="action-button"
-                      type="button"
-                      onClick={() => openEditCredentialModal(item.id)}
-                      title="Editar"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    </button>
-                    <button
-                      className="action-button action-button--danger"
-                      type="button"
-                      onClick={() => setDeletingId(item.id)}
-                      disabled={busy}
-                      title="Borrar"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="credential-card-body">
-                  <p className="credential-username">{item.username}</p>
-                  {item.urls.map((url) => (
-                    <a key={url} href={url} target="_blank" rel="noreferrer" className="credential-url">
-                      {url}
-                    </a>
-                  ))}
-                  <div className="credential-secret-row">
-                    <label className="credential-secret-label">Contraseña</label>
-                    <input
-                      className="password-preview"
-                      type={revealedId === item.id ? "text" : "password"}
-                      value={item.password}
-                      readOnly
-                      aria-label={`Contraseña de ${item.title}`}
-                    />
-                  </div>
-                   {item.totpSecret && <TotpCode secret={item.totpSecret} onCopy={() => addToast("Código TOTP copiado")} />}
-                </div>
-              </article>
-            );
-          })}
-        </section>
-      </div>
       {message && (
         <p className="feedback success" role="status">
           {message}

@@ -11,6 +11,7 @@ import {
 import { generateVaultKey, unwrapVaultKey, wrapVaultKey } from './crypto/vault-key.js';
 import {
   changeMasterPasswordRequest,
+  deleteAccount,
   getAuthSalt,
   loginAccount,
   logoutAccount,
@@ -121,6 +122,24 @@ export async function changeMasterPassword(currentPassword: string, newPassword:
 export async function logoutFromMemory() {
   try {
     await logoutAccount();
+  } finally {
+    vaultKey = null;
+    activeKdfSalt = null;
+    activeKdfIterations = null;
+  }
+}
+
+/** Elimina la cuenta en el servidor y destruye la Vault Key en memoria. */
+export async function deleteAccountFromPassword(currentPassword: string) {
+  if (!vaultKey || !activeKdfSalt || activeKdfIterations === null) {
+    throw new Error('La sesión no está disponible');
+  }
+
+  const masterKey = await deriveMasterKey(currentPassword, activeKdfSalt, activeKdfIterations);
+  const { authHash } = await deriveSubkeys(masterKey);
+
+  try {
+    await deleteAccount({ authHash });
   } finally {
     vaultKey = null;
     activeKdfSalt = null;
