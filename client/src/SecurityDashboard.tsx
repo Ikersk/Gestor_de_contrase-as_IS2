@@ -5,20 +5,14 @@ interface SecurityDashboardProps {
   credentials: DecryptedCredential[];
   healthReport: VaultHealthReport;
   breachedCount: number;
-  isChecking: boolean;
-  checkedCount: number;
   breachError: string | null;
-  onCheckBreach: () => void;
 }
 
 export function SecurityDashboard({
   credentials,
   healthReport,
   breachedCount,
-  isChecking,
-  checkedCount,
   breachError,
-  onCheckBreach,
 }: SecurityDashboardProps) {
   const weakCount = healthReport.weak.length;
   const reusedCount = healthReport.reused.length;
@@ -100,35 +94,7 @@ export function SecurityDashboard({
         </div>
       </div>
 
-      <div className="dashboard-actions">
-        <div className="dashboard-breach-check">
-          {isChecking ? (
-            <div className="breach-progress">
-              <span>Comprobando... {checkedCount}/{credentials.length}</span>
-              <div className="breach-progress-bar">
-                <span
-                  style={{
-                    transform: `scaleX(${credentials.length > 0 ? checkedCount / credentials.length : 0})`,
-                  }}
-                />
-              </div>
-            </div>
-          ) : (
-            <button
-              className="dashboard-breach-button"
-              type="button"
-              onClick={onCheckBreach}
-              disabled={credentials.length === 0}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-              Comprobar filtraciones
-            </button>
-          )}
-          {breachError && <p className="breach-error">{breachError}</p>}
-        </div>
-      </div>
+      {breachError && <p className="breach-error">{breachError}</p>}
     </section>
   );
 }

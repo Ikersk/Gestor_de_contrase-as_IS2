@@ -625,7 +625,6 @@ function Landing({ onAccess }: { onAccess: () => void }) {
         <section className="hero-section" aria-labelledby="hero-title">
           <div className="hero-copy">
             <div className="hero-badges">
-              <span className="security-badge">256-bit AES-GCM</span>
               <span className="security-badge">Zero-Knowledge</span>
             </div>
             <h1 id="hero-title">
@@ -635,7 +634,7 @@ function Landing({ onAccess }: { onAccess: () => void }) {
             </h1>
             <p className="hero-description">
               Arca deriva tus claves de cifrado directamente en tu navegador con
-              PBKDF2 y cifra cada credencial con AES-256-GCM antes de tocar la red.
+              y cifra cada credencial antes de tocar la red.
               El servidor solo almacena blobs indescifrables.
             </p>
             <div className="hero-actions">
@@ -650,9 +649,9 @@ function Landing({ onAccess }: { onAccess: () => void }) {
         {/* ── Signal bar ── */}
         <section className="signal-bar" aria-label="Principios de seguridad">
           <span><i className="signal-dot" /> Cifrado local</span>
-          <span>Tu clave nunca se almacena</span>
-          <span>Sesiones temporales</span>
-          <span>Auditoría en tiempo real</span>
+          <span><i className="signal-dot" /> Tu clave nunca se almacena</span>
+          <span><i className="signal-dot" /> Sesiones temporales</span>
+          <span><i className="signal-dot" /> Auditoría en tiempo real</span>
         </section>
 
         {/* ── Architecture: Backend Ciego ── */}
@@ -672,8 +671,8 @@ function Landing({ onAccess }: { onAccess: () => void }) {
                 </svg>
               </div>
               <h3>Derivación de clave</h3>
-              <p>PBKDF2 con 600 000 iteraciones genera tu clave AES-256 en la RAM del navegador. Nunca sale de tu dispositivo.</p>
-              <span className="arch-tag">PBKDF2 · 600K iteraciones</span>
+              <p>Arca genera tu clave en la RAM del navegador. Nunca sale de tu dispositivo.</p>
+              <span className="arch-tag">600K iteraciones</span>
             </article>
             <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "250ms" }}>
               <span className="arch-step-num">02</span>
@@ -685,8 +684,8 @@ function Landing({ onAccess }: { onAccess: () => void }) {
                 </svg>
               </div>
               <h3>Cifrado AES-GCM</h3>
-              <p>Cada payload se cifra con un IV aleatorio antes de tocar la red. El navegador genera ciphertext y IV que son ilegibles.</p>
-              <span className="arch-tag">AES-256-GCM · IV aleatorio</span>
+              <p>Cada payload se cifra antes de tocar la red. El navegador genera solo texto ilegibles.</p>
+              <span className="arch-tag">AES-256-GCM</span>
             </article>
             <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "400ms" }}>
               <span className="arch-step-num">03</span>
@@ -695,9 +694,9 @@ function Landing({ onAccess }: { onAccess: () => void }) {
                   <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
                 </svg>
               </div>
-              <h3>Supabase guarda blobs</h3>
-              <p>El servidor solo recibe datos cifrados. Ni Supabase ni Arca pueden leer tus credenciales — solo tú tienes la clave.</p>
-              <span className="arch-tag">Zero-Knowledge · Cero acceso</span>
+              <h3>La base de datos no conoce tus credenciales</h3>
+              <p>El servidor solo recibe datos cifrados. Arca no puede leer tus credenciales — solo tú tienes la clave.</p>
+              <span className="arch-tag">Zero-Knowledge</span>
             </article>
           </div>
         </section>
@@ -773,10 +772,6 @@ function Landing({ onAccess }: { onAccess: () => void }) {
         {/* ── Closing CTA ── */}
         <section className="closing-section" data-reveal="closing">
           <div className={`closing-inner reveal-item ${reveal("closing")}`}>
-            <div className="hero-badges" style={{ marginBottom: 24 }}>
-              <span className="security-badge">Zero-Knowledge Certified</span>
-              <span className="security-badge">Código Abierto</span>
-            </div>
             <h2>
               Menos exposición.
               <br />
@@ -856,7 +851,6 @@ function App() {
   const [selectedCredentialId, setSelectedCredentialId] = useState<number | string | null>(null);
   const [breachedAlerts, setBreachedAlerts] = useState<VaultHealthAlert[]>([]);
   const [isCheckingBreach, setIsCheckingBreach] = useState(false);
-  const [checkedCount, setCheckedCount] = useState(0);
   const [breachError, setBreachError] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -888,13 +882,10 @@ function App() {
 
   async function handleCheckBreach() {
     setIsCheckingBreach(true);
-    setCheckedCount(0);
     setBreachError(null);
 
     try {
-      const alerts = await checkCredentialsBreach(credentials, (checked) => {
-        setCheckedCount(checked);
-      });
+      const alerts = await checkCredentialsBreach(credentials);
       setBreachedAlerts(alerts);
     } catch {
       setBreachError("No se pudo conectar con Have I Been Pwned. Inténtalo de nuevo.");
@@ -902,6 +893,12 @@ function App() {
       setIsCheckingBreach(false);
     }
   }
+
+  useEffect(() => {
+    if (authenticated && !decrypting && credentials.length > 0 && breachedAlerts.length === 0 && !isCheckingBreach) {
+      handleCheckBreach();
+    }
+  }, [authenticated, decrypting, credentials.length]);
 
   useEffect(() => {
     const modal = credentialModalRef.current;
@@ -971,7 +968,6 @@ function App() {
       setDeletingId(null);
       setBreachedAlerts([]);
       setIsCheckingBreach(false);
-      setCheckedCount(0);
       setBreachError(null);
       setSelectedCredentialId(null);
       setBusy(false);
@@ -1215,10 +1211,7 @@ function App() {
         credentials={credentials}
         healthReport={healthReport}
         breachedCount={breachedIds.size}
-        isChecking={isCheckingBreach}
-        checkedCount={checkedCount}
         breachError={breachError}
-        onCheckBreach={handleCheckBreach}
       />
       <div className="vault-split-container">
         <section className="credential-list-panel" aria-label="Lista de credenciales">

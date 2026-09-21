@@ -65,6 +65,9 @@ export function validateCredential(credential: ValidatableCredential) {
     return 'Introduce un secreto TOTP Base32 válido o una URI otpauth válida';
   }
 
+  if (credential.urls.length === 0) {
+    return 'Debes añadir al menos una URL';
+  }
   if (credential.urls.length > FIELD_LIMITS.maxUrls) {
     return `No puedes añadir más de ${FIELD_LIMITS.maxUrls} URLs`;
   }

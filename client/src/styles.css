@@ -995,26 +995,6 @@ h1, h2, h3 { letter-spacing: -0.045em; }
   padding: 12px 0;
   border-top: 1px solid var(--border);
 }
-.breach-check-button { min-height: 36px; padding: 6px 12px; font-size: 12px; }
-.breach-progress { color: var(--text-secondary); font-size: 12px; }
-.breach-progress span { display: block; margin-bottom: 8px; }
-.breach-progress-bar {
-  height: 4px;
-  overflow: hidden;
-  background: var(--bg-interactive);
-  border-radius: 2px;
-}
-.breach-progress-bar span {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 2px;
-  transform-origin: left center;
-  transition: transform 300ms ease;
-  background: linear-gradient(90deg, var(--safe), var(--accent), var(--warn), var(--danger));
-  background-size: 200% 100%;
-  animation: breach-gradient-shift 2s linear infinite;
-}
 .breach-error { margin: 8px 0 0; color: var(--danger); font-size: 11px; }
 
 /* ── Modals ── */
@@ -1661,54 +1641,6 @@ h1, h2, h3 { letter-spacing: -0.045em; }
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-}
-.dashboard-breach-check {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.dashboard-breach-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  transition: color 150ms ease, background 150ms ease, border-color 150ms ease;
-}
-.dashboard-breach-button:hover:not(:disabled) {
-  color: var(--bg-primary);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.dashboard-breach-button:disabled { opacity: 0.4; cursor: not-allowed; }
-.breach-progress {
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-.breach-progress span { display: block; margin-bottom: 4px; }
-.breach-progress-bar {
-  height: 4px;
-  overflow: hidden;
-  background: var(--bg-interactive);
-  border-radius: 2px;
-}
-.breach-progress-bar span {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 2px;
-  transform-origin: left center;
-  transition: transform 300ms ease;
-  background: linear-gradient(90deg, var(--safe), var(--accent), var(--warn), var(--danger));
-  background-size: 200% 100%;
-  animation: breach-gradient-shift 2s linear infinite;
 }
 .breach-error {
   margin: 0;
@@ -2587,10 +2519,6 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 @keyframes stagger-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
-}
-@keyframes breach-gradient-shift {
-  0% { background-position: 0% 0; }
-  100% { background-position: 200% 0; }
 }
 @keyframes shimmer {
   0% { background-position: -400px 0; }
