@@ -717,6 +717,55 @@ h1, h2, h3 { letter-spacing: -0.045em; }
 .feedback.success { color: var(--safe); }
 .feedback.error { color: var(--danger); }
 
+/* ── Auth password inputs ── */
+.auth-password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.auth-password-wrapper input {
+  flex: 1;
+  padding-right: 40px;
+}
+.auth-eye-button {
+  position: absolute;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+.auth-eye-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+.confirm-input--valid {
+  border-color: #10B981 !important;
+}
+.confirm-input--error {
+  border-color: var(--danger) !important;
+}
+.confirm-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+.confirm-hint--error {
+  color: var(--danger);
+}
+.confirm-hint--success {
+  color: #10B981;
+}
+
 /* ── Vault workspace ── */
 .app-shell {
   width: min(1180px, calc(100% - 6rem));

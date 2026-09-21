@@ -414,6 +414,12 @@ function AuthPanel({
   setEmail,
   masterPassword,
   setMasterPassword,
+  confirmMasterPassword,
+  setConfirmMasterPassword,
+  showMasterPassword,
+  setShowMasterPassword,
+  showConfirmMasterPassword,
+  setShowConfirmMasterPassword,
   busy,
   message,
   error,
@@ -425,11 +431,23 @@ function AuthPanel({
   setEmail: (value: string) => void;
   masterPassword: string;
   setMasterPassword: (value: string) => void;
+  confirmMasterPassword: string;
+  setConfirmMasterPassword: (value: string) => void;
+  showMasterPassword: boolean;
+  setShowMasterPassword: (value: boolean) => void;
+  showConfirmMasterPassword: boolean;
+  setShowConfirmMasterPassword: (value: boolean) => void;
   busy: boolean;
   message: string;
   error: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const isRegister = view === "register";
+  const confirmDirty = confirmMasterPassword.length > 0;
+  const passwordsMatch = confirmDirty && masterPassword === confirmMasterPassword;
+  const passwordsMismatch = confirmDirty && masterPassword !== confirmMasterPassword;
+  const submitDisabled = busy || (isRegister && confirmDirty && !passwordsMatch);
+
   return (
     <section className="auth-card" aria-labelledby="auth-title">
       <div className="auth-card-top">
@@ -448,7 +466,12 @@ function AuthPanel({
           type="button"
           role="tab"
           aria-selected={view === "login"}
-          onClick={() => setView("login")}
+          onClick={() => {
+            setView("login");
+            setConfirmMasterPassword("");
+            setShowMasterPassword(false);
+            setShowConfirmMasterPassword(false);
+          }}
         >
           Iniciar sesión
         </button>
@@ -457,7 +480,12 @@ function AuthPanel({
           type="button"
           role="tab"
           aria-selected={view === "register"}
-          onClick={() => setView("register")}
+          onClick={() => {
+            setView("register");
+            setConfirmMasterPassword("");
+            setShowMasterPassword(false);
+            setShowConfirmMasterPassword(false);
+          }}
         >
           Crear cuenta
         </button>
@@ -474,17 +502,96 @@ function AuthPanel({
           required
         />
         <label htmlFor="master-password">Contraseña maestra</label>
-        <input
-          id="master-password"
-          type="password"
-          maxLength={FIELD_LIMITS.masterPassword}
-          minLength={12}
-          autoComplete={view === "login" ? "current-password" : "new-password"}
-          value={masterPassword}
-          onChange={(event) => setMasterPassword(event.target.value)}
-          required
-        />
-        <button className="primary-button" type="submit" disabled={busy}>
+        <div className="auth-password-wrapper">
+          <input
+            id="master-password"
+            type={showMasterPassword ? "text" : "password"}
+            maxLength={FIELD_LIMITS.masterPassword}
+            minLength={12}
+            autoComplete={view === "login" ? "current-password" : "new-password"}
+            value={masterPassword}
+            onChange={(event) => setMasterPassword(event.target.value)}
+            required
+          />
+          <button
+            className="auth-eye-button"
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowMasterPassword(!showMasterPassword)}
+            aria-label={showMasterPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+          >
+            {showMasterPassword ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            )}
+          </button>
+        </div>
+        {isRegister && (
+          <>
+            <label htmlFor="confirm-master-password">Confirmar contraseña maestra</label>
+            <div className="auth-password-wrapper">
+              <input
+                id="confirm-master-password"
+                type={showConfirmMasterPassword ? "text" : "password"}
+                maxLength={FIELD_LIMITS.masterPassword}
+                minLength={12}
+                autoComplete="new-password"
+                className={
+                  passwordsMatch
+                    ? "confirm-input--valid"
+                    : passwordsMismatch
+                      ? "confirm-input--error"
+                      : ""
+                }
+                value={confirmMasterPassword}
+                onChange={(event) => setConfirmMasterPassword(event.target.value)}
+                required
+              />
+              <button
+                className="auth-eye-button"
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowConfirmMasterPassword(!showConfirmMasterPassword)}
+                aria-label={showConfirmMasterPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showConfirmMasterPassword ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+            {passwordsMatch && (
+              <p className="confirm-hint confirm-hint--success">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5"/>
+                </svg>
+                Las contraseñas coinciden
+              </p>
+            )}
+            {passwordsMismatch && (
+              <p className="confirm-hint confirm-hint--error">
+                Las contraseñas no coinciden
+              </p>
+            )}
+          </>
+        )}
+        <button className="primary-button" type="submit" disabled={submitDisabled}>
           {busy
             ? "Procesando..."
             : view === "login"
@@ -854,6 +961,9 @@ function App() {
   const [breachError, setBreachError] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [confirmMasterPassword, setConfirmMasterPassword] = useState("");
+  const [showMasterPassword, setShowMasterPassword] = useState(false);
+  const [showConfirmMasterPassword, setShowConfirmMasterPassword] = useState(false);
 
   function addToast(msg: string, type: Toast["type"] = "success") {
     const id = ++toastIdRef.current;
@@ -922,6 +1032,10 @@ function App() {
     setMessage("");
     try {
       if (view === "register") {
+        if (masterPassword !== confirmMasterPassword) {
+          addToast("Las contraseñas no coinciden", "error");
+          return;
+        }
         await registerWithMasterPassword(email, masterPassword);
         setView("login");
         setMessage("Cuenta creada. Inicia sesión para abrir tu bóveda.");
@@ -934,6 +1048,9 @@ function App() {
         setMessage("Bóveda desbloqueada en memoria.");
       }
       setMasterPassword("");
+      setConfirmMasterPassword("");
+      setShowMasterPassword(false);
+      setShowConfirmMasterPassword(false);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -970,6 +1087,9 @@ function App() {
       setIsCheckingBreach(false);
       setBreachError(null);
       setSelectedCredentialId(null);
+      setConfirmMasterPassword("");
+      setShowMasterPassword(false);
+      setShowConfirmMasterPassword(false);
       setBusy(false);
     }
   }
@@ -1172,11 +1292,20 @@ function App() {
             setView(nextView);
             setError("");
             setMessage("");
+            setConfirmMasterPassword("");
+            setShowMasterPassword(false);
+            setShowConfirmMasterPassword(false);
           }}
           email={email}
           setEmail={setEmail}
           masterPassword={masterPassword}
           setMasterPassword={setMasterPassword}
+          confirmMasterPassword={confirmMasterPassword}
+          setConfirmMasterPassword={setConfirmMasterPassword}
+          showMasterPassword={showMasterPassword}
+          setShowMasterPassword={setShowMasterPassword}
+          showConfirmMasterPassword={showConfirmMasterPassword}
+          setShowConfirmMasterPassword={setShowConfirmMasterPassword}
           busy={busy}
           message={message}
           error={error}
