@@ -851,7 +851,6 @@ function App() {
   const [selectedCredentialId, setSelectedCredentialId] = useState<number | string | null>(null);
   const [breachedAlerts, setBreachedAlerts] = useState<VaultHealthAlert[]>([]);
   const [isCheckingBreach, setIsCheckingBreach] = useState(false);
-  const [checkedCount, setCheckedCount] = useState(0);
   const [breachError, setBreachError] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -883,13 +882,10 @@ function App() {
 
   async function handleCheckBreach() {
     setIsCheckingBreach(true);
-    setCheckedCount(0);
     setBreachError(null);
 
     try {
-      const alerts = await checkCredentialsBreach(credentials, (checked) => {
-        setCheckedCount(checked);
-      });
+      const alerts = await checkCredentialsBreach(credentials);
       setBreachedAlerts(alerts);
     } catch {
       setBreachError("No se pudo conectar con Have I Been Pwned. Inténtalo de nuevo.");
@@ -897,6 +893,12 @@ function App() {
       setIsCheckingBreach(false);
     }
   }
+
+  useEffect(() => {
+    if (authenticated && !decrypting && credentials.length > 0 && breachedAlerts.length === 0 && !isCheckingBreach) {
+      handleCheckBreach();
+    }
+  }, [authenticated, decrypting, credentials.length]);
 
   useEffect(() => {
     const modal = credentialModalRef.current;
@@ -966,7 +968,6 @@ function App() {
       setDeletingId(null);
       setBreachedAlerts([]);
       setIsCheckingBreach(false);
-      setCheckedCount(0);
       setBreachError(null);
       setSelectedCredentialId(null);
       setBusy(false);
@@ -1210,10 +1211,7 @@ function App() {
         credentials={credentials}
         healthReport={healthReport}
         breachedCount={breachedIds.size}
-        isChecking={isCheckingBreach}
-        checkedCount={checkedCount}
         breachError={breachError}
-        onCheckBreach={handleCheckBreach}
       />
       <div className="vault-split-container">
         <section className="credential-list-panel" aria-label="Lista de credenciales">
