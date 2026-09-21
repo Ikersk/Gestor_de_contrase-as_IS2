@@ -25,15 +25,17 @@ Al final de cada fase hay un prompt sugerido, listo para copiar y pegar.
 |---|---|---|
 | Base de datos | **PostgreSQL** vía `pg`, alojado en Supabase | PostgreSQL gestionado, SQL real, persistencia remota y soporte para concurrencia y despliegue. |
 | Backend | **Node.js + Express.js** | Pedido en el enunciado. Mínimo boilerplate. |
-| Hash servidor del Auth Hash | **argon2** (paquete npm) — alternativa: **bcryptjs** si da problemas de compilación nativa | Segunda capa de hashing independiente de la derivación del cliente. |
-| Frontend | **Vanilla JS/TypeScript + Vite** | Te obliga a tocar la Web Crypto API directamente sin que un framework la esconda. Si ya dominas React, es intercambiable sin cambiar el resto del plan. |
+| Hash servidor del Auth Hash | **bcryptjs** (alternativa: **argon2** si se necesita mayor resistencia a GPU) | Segunda capa de hashing independiente de la derivación del cliente. bcryptjs es puro JS, sin dependencias nativas. |
+| Frontend | **React + TypeScript + Vite** | Componentes reutilizables, tipado estático, HMR rápido. Web Crypto API accesible directamente sin intermediarios. |
 | Derivación de claves (cliente) | **PBKDF2-SHA256** vía `crypto.subtle` nativo | Evita instalar Argon2 en WASM en el navegador. Sube a Argon2id (con `hash-wasm`) como mejora opcional en la Fase 7 si quieres más puntos de innovación. |
 | Cifrado de datos | **AES-GCM 256** vía `crypto.subtle` nativo | Nativo del navegador, autenticado (integridad + confidencialidad). |
 | Separación de claves | **HKDF** vía `crypto.subtle` nativo | Deriva Encryption Key y Auth Hash del mismo Master Key sin que uno revele el otro. |
+| TOTP/2FA | **otpauth** (biblioteca npm) | Generación de códigos TOTP estándar RFC 6238 para autenticación de dos factores en credenciales. |
+| Detección de brechas | **Have I Been Pwned** (API k-Anonymity) | Verificación automática de contraseñas comprometidas sin revelar las contraseñas al servidor. |
 | Sesión | **Cookie httpOnly + JWT** (`jsonwebtoken`) | Evita que un XSS pueda robar el token desde `localStorage`. |
 | Seguridad HTTP | **helmet**, **express-rate-limit**, **cors** | CSP, límite de intentos de login, control de origen. |
 | Validación | **zod** | Verifica forma (base64, tamaños) sin nunca interpretar contenido. |
-| Tests | **Vitest** o `node:test` | Unitarios para crypto + vectores NIST, e2e para el flujo completo. |
+| Tests | **Vitest** (cliente) + **node:test + supertest** (servidor) | Unitarios para crypto + vectores NIST, e2e para el flujo completo. |
 | Revisión de tráfico | **DevTools del navegador** | Permite inspeccionar las peticiones y confirmar que no viajan secretos en texto plano. |
 
 ---
@@ -46,23 +48,42 @@ password-manager-zk/
 │   ├── src/
 │   │   ├── db.js              # pool PostgreSQL + acceso a la base
 │   │   ├── routes/
-│   │   │   ├── auth.js        # register, salt, login, logout
+│   │   │   ├── auth.js        # register, salt, login, logout, change-password, delete-account
 │   │   │   └── vault.js       # CRUD de blobs cifrados
 │   │   ├── middleware/
 │   │   │   └── requireAuth.js
-│   │   └── app.js
-│   ├── sql/001_initial_schema.sql # migración inicial PostgreSQL
-│   ├── tests/
-│   │   └── crypto-vectors.test.js
+│   │   ├── validation.js      # schemas Zod para todos los endpoints
+│   │   ├── migrate.js         # migración idempotente del esquema
+│   │   └── app.js             # Express + helmet + cors + rutas
+│   ├── sql/
+│   │   ├── 001_initial_schema.sql
+│   │   └── 002_session_version.sql
+│   ├── test/
+│   │   ├── auth.test.js
+│   │   └── vault.test.js
+│   ├── .env.example
 │   └── package.json
 ├── client/
 │   ├── src/
 │   │   ├── crypto/
 │   │   │   ├── kdf.js          # deriveMasterKey, deriveSubkeys (HKDF)
 │   │   │   ├── vault-key.js    # wrap/unwrap
-│   │   │   └── cipher.js       # encryptItem/decryptItem
-│   │   ├── api.js
-│   │   └── main.js
+│   │   │   ├── cipher.js       # encryptItem/decryptItem
+│   │   │   ├── crypto.test.js
+│   │   │   └── nist-vectors.test.js
+│   │   ├── api.ts              # cliente HTTP (register, login, vault CRUD, etc.)
+│   │   ├── auth.ts             # lógica de autenticación (register, login, changePassword, deleteAccount)
+│   │   ├── hibp.ts             # Have I Been Pwned (k-Anonymity)
+│   │   ├── totp.ts             # generación de códigos TOTP
+│   │   ├── password-generator.ts # generador seguro de contraseñas
+│   │   ├── validation.ts       # validación de campos en cliente
+│   │   ├── vault.ts            # interfaces Credential, DecryptedCredential
+│   │   ├── vault-health.ts     # auditoría de salud de la bóveda
+│   │   ├── main.tsx            # app React principal (AuthPanel, VaultView, AccountModal, etc.)
+│   │   ├── SecurityDashboard.tsx # panel de métricas de seguridad
+│   │   ├── CredentialDetail.tsx  # vista de detalle de credencial
+│   │   └── styles.css          # estilos globales
+│   ├── .env.example
 │   └── package.json
 └── PLAN.md                     # este archivo
 ```
@@ -77,9 +98,10 @@ CREATE TABLE users (
   email               TEXT UNIQUE NOT NULL,
   kdf_salt            TEXT NOT NULL,       -- base64, generado en el CLIENTE
   kdf_iterations      INTEGER NOT NULL,    -- ej. 600000
-  auth_hash_hashed    TEXT NOT NULL,       -- argon2(authHash del cliente)
+  auth_hash_hashed    TEXT NOT NULL,       -- bcryptjs(authHash del cliente, cost 12)
   wrapped_vault_key   TEXT NOT NULL,       -- base64, AES-GCM(vaultKey)
   wrap_iv             TEXT NOT NULL,       -- base64, 12 bytes
+  session_version     INTEGER NOT NULL DEFAULT 0, -- se incrementa en cambio de contraseña
   created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -102,10 +124,13 @@ sobre el contenido real de los elementos cifrados.
 
 | Método | Ruta | Body | Auth | Devuelve |
 |---|---|---|---|---|
+| GET | `/api/health` | — | No | `200 { status: "ok" }` |
 | POST | `/api/auth/register` | `{email, kdfSalt, kdfIterations, authHash, wrappedVaultKey, wrapIv}` | No | `201` |
 | GET | `/api/auth/salt?email=` | — | No (rate-limited fuerte) | `{kdfSalt, kdfIterations}` |
 | POST | `/api/auth/login` | `{email, authHash}` | No | Cookie httpOnly + `{wrappedVaultKey, wrapIv}` |
 | POST | `/api/auth/logout` | — | Sí | `204` |
+| POST | `/api/auth/change-password` | `{currentAuthHash, kdfSalt, kdfIterations, authHash, wrappedVaultKey, wrapIv}` | Sí | `200` + cookie cleared |
+| DELETE | `/api/auth/account` | `{authHash}` | Sí | `200` + cookie cleared |
 | GET | `/api/vault` | — | Sí | `[{id, iv, ciphertext, createdAt}]` |
 | POST | `/api/vault` | `{iv, ciphertext}` | Sí | `{id}` |
 | PUT | `/api/vault/:id` | `{iv, ciphertext}` | Sí | `204` |
@@ -206,15 +231,15 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 
 ## 7. Checklist final antes de entregar
 
-- [ ] Ningún endpoint recibe contraseña maestra ni clave de cifrado en texto plano.
-- [ ] `SELECT * FROM users` y `SELECT * FROM vault_items` no revelan nada legible.
-- [ ] IVs nunca se reutilizan (verificado por test).
-- [ ] Auth Hash y Encryption Key derivan de contextos HKDF distintos.
-- [ ] Rate limiting activo en login.
-- [ ] CSP sin `unsafe-inline`/`unsafe-eval`.
-- [ ] Cookie de sesión `httpOnly`, `Secure`, `SameSite=Strict`.
-- [ ] Vectores NIST pasando.
-- [ ] Tablas de Supabase revisadas manualmente.
-- [ ] Revisión de peticiones en DevTools documentada.
-- [ ] Sección de limitaciones conocidas escrita en el README (código entregado por el servidor).
+- [x] Ningún endpoint recibe contraseña maestra ni clave de cifrado en texto plano.
+- [x] `SELECT * FROM users` y `SELECT * FROM vault_items` no revelan nada legible.
+- [x] IVs nunca se reutilizan (verificado por test).
+- [x] Auth Hash y Encryption Key derivan de contextos HKDF distintos.
+- [x] Rate limiting activo en login, salt, change-password y delete-account.
+- [x] CSP sin `unsafe-inline`/`unsafe-eval`.
+- [x] Cookie de sesión `httpOnly`, `Secure`, `SameSite=Strict`.
+- [x] Vectores NIST pasando.
+- [x] Tablas de Supabase revisadas manualmente.
+- [x] Revisión de peticiones en DevTools documentada.
+- [x] Sección de limitaciones conocidas escrita en el README (código entregado por el servidor).
 
