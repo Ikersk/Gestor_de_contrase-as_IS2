@@ -1,7 +1,6 @@
-# Gestor de contrasenas Zero-Knowledge
+# Arca — Gestor de contraseñas Zero-Knowledge
 
-Gestor de contrasenas con arquitectura split-key y persistencia PostgreSQL en Supabase.
-La implementacion avanza por fases segun [PLAN.md](PLAN.md).
+Gestor de contraseñas con arquitectura split-key y persistencia PostgreSQL en Supabase. La criptografía se ejecuta enteramente en el navegador; el servidor almacena material derivado y blobs cifrados sin nunca ver contraseñas ni claves en texto plano.
 
 ## Requisitos
 
@@ -9,24 +8,18 @@ La implementacion avanza por fases segun [PLAN.md](PLAN.md).
 - npm
 - Un proyecto PostgreSQL en Supabase
 
-## Backend
+## Instalación
+
+### 1. Backend
 
 ```bash
 cd server
 npm install
-npm run db:check
-npm run db:migrate
-npm run dev
 ```
 
-Antes de arrancar, crea `server/.env` desde `server/.env.example` y completa
-la cadena de conexion de Supabase. El servidor queda disponible en
-`http://localhost:3000`; `/health` comprueba tambien la conexion PostgreSQL.
+### 2. Configuración
 
-`npm run db:migrate` crea las tablas `users` y `vault_items` de forma
-idempotente. Nunca subas `server/.env` ni una contrasena real al repositorio.
-
-Ejemplo de configuracion:
+Crea `server/.env` desde `server/.env.example` y completa la cadena de conexión:
 
 ```env
 DATABASE_URL=postgresql://postgres:TU_PASSWORD@db.TU_PROJECT_REF.supabase.co:5432/postgres
@@ -37,44 +30,24 @@ COOKIE_SECURE=false
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
-En desarrollo sobre `http://localhost`, `COOKIE_SECURE=false` permite que el
-navegador envie la cookie de sesion. En produccion debe mantenerse en `true`.
-`FRONTEND_ORIGIN` limita CORS al origen exacto del cliente y permite
-credenciales para la cookie de sesion. El backend tambien envia una CSP estricta
-mediante Helmet.
+> **Importante:** En desarrollo sobre `http://localhost`, `COOKIE_SECURE=false` es necesario para que el navegador envíe la cookie de sesión sin HTTPS. En producción debe mantenerse en `true`.
 
-Los formularios limitan el correo a 40 caracteres, la contrasena maestra a 42,
-el nombre de credencial a 30, el usuario a 30, cada URL a 100 y permiten hasta
-8 URLs por credencial. Nombre y usuario deben contener al menos una letra. Las credenciales
-se validan en el cliente antes de cifrarse; el backend limita ademas el cuerpo
-JSON y los blobs cifrados.
+### 3. Base de datos
 
-El cliente deriva las claves localmente durante el registro y el login. La
-contrasena maestra nunca se envia al backend ni se guarda en `localStorage` o
-`sessionStorage`; la `vaultKey` solo vive en memoria mientras la sesion esta
-abierta.
+```bash
+npm run db:check    # verifica la conexión a PostgreSQL
+npm run db:migrate  # crea las tablas users y vault_items (idempotente)
+```
 
-Con la sesion abierta puedes crear, editar y borrar credenciales desde la
-interfaz. Cada item se cifra en el cliente antes de enviarse a `/api/vault`.
+### 4. Arrancar el servidor
 
-El formulario de credenciales se abre en un modal único para crear y editar
-accesos. El botón `+ Nueva credencial` inicia un formulario vacío; las acciones
-`Editar` y `Resolver` cargan el acceso correspondiente. El generador de
-contraseñas usa aleatoriedad criptográfica del navegador y el valor se cifra
-antes de guardarse.
+```bash
+npm run dev
+```
 
-La sección **Salud de la Bóveda** analiza únicamente el array de credenciales
-ya descifradas en la memoria del cliente. Detecta reutilización y contraseñas
-débiles mediante una estimación local de longitud y diversidad, y muestra un
-puntaje de 0 a 100. Esta auditoría no realiza peticiones ni envía contraseñas
-al servidor. Cada alerta permite abrir el modal de edición para resolverla.
+El servidor queda disponible en `http://localhost:3000`. El endpoint `/health` comprueba la conexión a PostgreSQL.
 
-El cambio de contraseña maestra se inicia con el botón correspondiente en la
-bóveda y se realiza dentro de una ventana modal. Al cancelar o cerrar, sus
-campos se limpian. Tras completarlo, se rota el material derivado, se invalida
-la sesión actual y la aplicación solicita iniciar sesión de nuevo.
-
-## Cliente
+### 5. Frontend
 
 En otra terminal:
 
@@ -84,49 +57,82 @@ npm install
 npm run dev
 ```
 
-Vite mostrara la URL local del cliente, normalmente `http://localhost:5173`.
+Vite mostrará la URL local del cliente (normalmente `http://localhost:5173`). El proxy de Vite redirige `/api` al backend en `http://localhost:3000`.
 
-## Pruebas y auditoria
+## Features
 
-Ejecuta las pruebas normales sin tocar la base de datos real:
+### Seguridad
+
+- **Zero-Knowledge**: la contraseña maestra nunca sale del navegador. El servidor solo recibe material derivado (authHash) y blobs cifrados.
+- **PBKDF2-SHA256** (600K iteraciones, salt 16 bytes) para derivación de la Master Key.
+- **HKDF-SHA256** para separar Encryption Key y Auth Hash de contextos independientes.
+- **AES-GCM-256** (IV 12 bytes único por operación) para cifrar la Vault Key y cada credencial.
+- **Vault Key** de 256 bits generada una vez en el registro, nunca almacenada en texto plano.
+- **bcryptjs** (cost 12) para hashing del authHash en servidor.
+- **JWT** HS256 en cookie httpOnly, Secure, SameSite=Strict (8 horas).
+- **Rate limiting** (5 intentos/15min) en login, cambio de contraseña y eliminación de cuenta.
+- **CSP** estricta via Helmet (sin unsafe-inline/eval).
+- **CORS** restringido a FRONTEND_ORIGIN.
+- **Vectores NIST** verificados byte a byte para PBKDF2 y AES-GCM.
+
+### Funcionalidad
+
+- **Bóveda de credenciales**: crear, editar, eliminar credenciales cifradas con split-pane layout (lista + detalle).
+- **Generador de contraseñas**: aleatoriedad criptográfica (`crypto.getRandomValues`) con rejection sampling.
+- **TOTP/2FA**: generación de códigos TOTP para credenciales que lo requieran.
+- **Detección de brechas (HIBP)**: verificación automática de contraseñas comprometidas usando k-Anonymity. Se ejecuta al desbloquear la bóveda.
+- **Security Dashboard**: métricas de salud, credenciales, alertas y brechas HIBP.
+- **Cambio de contraseña maestra**: re-derivación de claves y re-envoltura de la Vault Key sin modificar ciphertexts existentes.
+- **Eliminación de cuenta**: eliminación permanente de todos los datos cifrados.
+- **Theme Switcher**: modo oscuro/claro con persistencia en localStorage.
+- **Landing page**: presentación del proyecto con arquitectura, FAQ y CTA.
+- **Toast Notifications**: confirmaciones y errores en notificaciones efímeras.
+
+## Límites de campos
+
+| Campo | Longitud máxima | Notas |
+|---|---|---|
+| Email | 40 caracteres | Formato válido obligatorio |
+| Contraseña maestra | 42 caracteres | Mínimo 12 caracteres |
+| Nombre de credencial | 30 caracteres | Al menos una letra |
+| Usuario de credencial | 30 caracteres | Al menos una letra |
+| Contraseña de credencial | 32 caracteres | — |
+| URL | 100 caracteres | http/https, máximo 8 URLs por credencial |
+| Secreto TOTP | 128 caracteres | Base32 |
+| Cuerpo JSON servidor | 2 MB | Límite de Express |
+
+## Pruebas y auditoría
 
 ```bash
+# Servidor (node:test + supertest)
 cd server
 npm test
 
-cd ../client
-npm test -- --run
+# Cliente (Vitest)
+cd client
+npm test
 npm run build
 ```
 
-El build genera automaticamente hashes SRI SHA-384 en `dist/index.html` para
-los bundles JavaScript y CSS.
+El build genera automáticamente hashes SRI SHA-384 en `dist/index.html` para los bundles JavaScript y CSS.
 
-Para revisar manualmente la base de datos, abre el **SQL Editor** de Supabase y
-consulta las tablas:
+### Auditoría de base de datos
+
+Abre el **SQL Editor** de Supabase y ejecuta:
 
 ```sql
 SELECT * FROM users;
 SELECT * FROM vault_items;
 ```
 
-En `users` deben aparecer el hash del `authHash`, el `kdf_salt`, el
-`wrapped_vault_key` y el `wrap_iv`. En `vault_items` deben aparecer únicamente
-el `iv` y el `ciphertext`. Estos valores deben ser hashes o cadenas Base64
-ilegibles; no deben aparecer contraseñas, usuarios ni URLs en texto plano.
+En `users` deben aparecer hashes bcrypt, salt, iteraciones, `wrapped_vault_key` y `wrap_iv`. En `vault_items` únicamente `iv` y `ciphertext`. Todos los valores deben ser hashes o cadenas Base64 ilegibles; no deben aparecer contraseñas, usuarios ni URLs en texto plano.
 
-La revisión visual de `ciphertext` es suficiente para esta comprobación manual:
-el valor debe ser Base64 y no debe mostrar directamente el contenido de la
-credencial. Buscar una palabra legible con `LIKE` no es una prueba válida,
-porque el contenido está cifrado antes de convertirse a Base64.
+### Auditoría de tráfico
 
-La revisión de la base debe hacerse sobre un entorno de pruebas y las capturas
-no deben contener secretos reales.
+Abre DevTools → **Network** y usa la aplicación. En las peticiones de registro, login y vault deben aparecer únicamente material derivado, IVs y blobs Base64; nunca la contraseña maestra, la Vault Key ni los campos legibles de una credencial.
 
-## Revisión del tráfico en DevTools
+## Documentación adicional
 
-Abre las herramientas de desarrollador del navegador, entra en la pestaña
-**Network** y usa la aplicación. En las peticiones de registro, login y vault
-deben aparecer únicamente material derivado, IVs y blobs Base64; nunca la
-contraseña maestra, la Vault Key ni los campos legibles de una credencial.
-Evita guardar o compartir capturas que contengan secretos reales.
+- [PLAN.md](PLAN.md) — plan del proyecto, especificación criptográfica y fases.
+- [FLUJO.md](FLUJO.md) — descripción detallada de cada flujo de datos.
+- [DOCS.md](DOCS.md) — documentación técnica y decisiones arquitectónicas.

@@ -198,19 +198,6 @@ Si la contrasena es incorrecta, la autenticacion falla o AES-GCM no puede valida
 
 ## 5. Guardar una credencial
 
-## 5.1 Cambio de contraseña maestra
-
-El cambio se realiza sin enviar ninguna contraseña al servidor y sin modificar los ciphertexts existentes:
-
-1. El cliente deriva el `currentAuthHash` con el salt y las iteraciones actuales.
-2. Genera un salt nuevo y deriva el nuevo `authHash` y la nueva `Encryption Key`.
-3. Envuelve la misma `Vault Key` con la nueva `Encryption Key` y un IV nuevo.
-4. Envía únicamente derivados, metadatos KDF y blobs Base64 a `POST /api/auth/change-password`.
-5. El servidor verifica el material actual, actualiza todo dentro de una transacción e incrementa `session_version`.
-6. Se invalida la cookie actual y todas las sesiones anteriores; el usuario debe iniciar sesión de nuevo.
-
-La `Vault Key` no cambia, por lo que los items guardados siguen siendo descifrables tras el nuevo login.
-
 El usuario introduce:
 
 ```json
@@ -218,7 +205,7 @@ El usuario introduce:
   "title": "Correo",
   "username": "usuario@example.com",
   "password": "contraseña-del-servicio",
-  "url": "https://example.com"
+  "urls": ["https://example.com"]
 }
 ```
 
@@ -345,17 +332,133 @@ Al cerrar sesion:
 
 La clave de la boveda no se persiste para recuperarla automaticamente despues de cerrar la sesion.
 
-## 9. Datos visibles en cada capa
+## 9. Cambio de contraseña maestra
+
+El cambio se realiza sin enviar ninguna contraseña al servidor y sin modificar los ciphertexts existentes:
+
+1. El cliente deriva el `currentAuthHash` con el salt y las iteraciones actuales.
+2. Genera un salt nuevo y deriva el nuevo `authHash` y la nueva `Encryption Key`.
+3. Envuelve la misma `Vault Key` con la nueva `Encryption Key` y un IV nuevo.
+4. Envía únicamente derivados, metadatos KDF y blobs Base64 a `POST /api/auth/change-password`.
+5. El servidor verifica el material actual, actualiza todo dentro de una transacción e incrementa `session_version`.
+6. Se invalida la cookie actual y todas las sesiones anteriores; el usuario debe iniciar sesión de nuevo.
+
+La `Vault Key` no cambia, por lo que los items guardados siguen siendo descifrables tras el nuevo login.
+
+## 10. Eliminación de cuenta
+
+El usuario puede eliminar su cuenta permanentemente desde el Account Modal ("Mi Cuenta" → "Zona de Peligro").
+
+### Flujo completo:
+
+1. El cliente solicita la contraseña actual al usuario (campo de confirmación).
+2. Deriva `authHash` desde la contraseña ingresada usando el salt y las iteraciones activas.
+3. Envía `DELETE /api/auth/account` con `{ authHash }`.
+4. El servidor verifica el `authHash` con `bcrypt.compare` dentro de una transacción.
+5. Elimina todos los `vault_items` del usuario (ON DELETE CASCADE también lo haría, pero se hace explícitamente).
+6. Elimina la fila de `users`.
+7. Limpia la cookie de sesión.
+8. El cliente destruye `vaultKey`, `activeKdfSalt`, `activeKdfIterations` en memoria.
+9. Ejecuta `localStorage.clear()` y redirige a la landing page.
+
+La eliminación es irreversible. Todos los datos cifrados se pierden permanentemente.
+
+## 11. Detección de brechas (Have I Been Pwned)
+
+El sistema verifica automáticamente si alguna contraseña de la bóveda ha sido comprometida, usando la API de Have I Been Pwned con el protocolo k-Anonymity.
+
+### Flujo:
+
+1. Al desbloquear la bóveda (login exitoso), se lanza automáticamente la verificación.
+2. Para cada credencial, se extrae el campo `password`.
+3. Se calcula SHA-1 de la contraseña.
+4. Se envían solo los primeros 5 caracteres del hash SHA-1 a la API de HIBP.
+5. La API devuelve todos los suffixes de hashes que coinciden con ese prefijo.
+6. El cliente verifica si el suffix completo de alguna contraseña aparece en la respuesta.
+7. Si aparece, la contraseña está comprometida → se muestra en el Security Dashboard.
+
+### Datos transmitidos por red:
+
+- Solo los primeros 5 caracteres de un hash SHA-1 (16 bits de entropía).
+- La contraseña original, el hash completo y la credencial nunca salen del navegador.
+- La API de HIBP no puede determinar qué contraseña específica se está verificando.
+
+### Resultados:
+
+Los resultados se muestran en el Security Dashboard como parte de la métrica "Brechas HIBP". Las credenciales comprometidas se marcan con un badge rojo en la lista izquierda del split-pane.
+
+## 12. Funciones de interfaz (UI)
+
+### 12.1 Security Dashboard
+
+Panel de métricas situado encima del split-pane de la bóveda. Muestra 4 tarjetas:
+
+- **Salud**: porcentaje calculado por `auditVault()` (credenciales débiles, reutilizadas, comprometidas).
+- **Credenciales**:数量 total de credenciales descifradas.
+- **Alertas**: suma de credenciales débiles + reutilizadas + comprometidas.
+- **Brechas HIBP**:数量 de credenciales con contraseñas en la base de datos de HIBP.
+
+El breach check se ejecuta automáticamente al entrar a la bóveda.
+
+### 12.2 Account Modal ("Mi Cuenta")
+
+Modal accesible desde el botón en el footer del sidebar izquierdo. Contiene:
+
+- **Cambiar contraseña maestra**: formulario con contraseña actual, nueva contraseña y confirmación. Requiere que las contraseñas coincidan. Al enviar, se ejecuta el flujo de la sección 9.
+- **Zona de Peligro**: botón "Eliminar Cuenta" que solicita la contraseña actual antes de ejecutar la eliminación (sección 10).
+
+### 12.3 TOTP / 2FA
+
+Las credenciales pueden almacenar un secreto TOTP (`totpSecret`). El componente `CredentialDetail` muestra:
+
+- El código TOTP actual (se renueva cada 30 segundos).
+- Un temporizador visual de tiempo restante.
+- La posibilidad de copiar el código al portapapeles.
+
+El secreto TOTP se cifra dentro de la credencial junto con el resto de campos (título, usuario, contraseña, URLs). Nunca viaja en texto plano.
+
+### 12.4 Generador de contraseñas
+
+El formulario de credenciales incluye un generador seguro que:
+
+- Usa `crypto.getRandomValues` con rejection sampling para eliminar sesgo de módulo.
+- Permite configurar longitud (8-64), mayúsculas, minúsculas, números y símbolos.
+- Muestra la contraseña generada con opción de ocultar/mostrar.
+- La contraseña se inserta directamente en el campo de la credencial.
+
+### 12.5 Theme Switcher
+
+Permite alternar entre tema oscuro (default) y claro. La preferencia se guarda en `localStorage` y se aplica al cargar la aplicación.
+
+### 12.6 Split-Pane Layout
+
+La bóveda usa un layout de panel dividido:
+
+- **Panel izquierdo** (340px): lista de credenciales con búsqueda, favicon, badges de alertas.
+- **Panel derecho** (resto): detalle de la credencial seleccionada (solo lectura) con opción de editar o eliminar.
+- **Dashboard** (arriba): Security Dashboard con métricas.
+
+La credencial activa se resalta con fondo `#1F2937` y borde izquierdo cyan `#06B6D4`.
+
+### 12.7 Toast Notifications
+
+Sistema de notificaciones efímeras (3 segundos) que aparecen en la esquina inferior derecha. Se usa para:
+
+- Confirmación de eliminación de cuenta.
+- Error de contraseñas no coincidentes en registro.
+- Otros eventos de éxito/error.
+
+## 13. Datos visibles en cada capa
 
 | Capa | Puede ver | No debe ver |
 |---|---|---|
 | Formulario del navegador | Contrasena maestra y credencial mientras se editan | Nada fuera de la memoria de la pagina |
 | Cliente criptografico | Master Key, Encryption Key, Auth Hash y Vault Key durante la sesion | Persistencia de esas claves en Web Storage |
-| Red | Email, salt, iteraciones, Auth Hash, blobs Base64 y cookie de sesion | Contrasena maestra, Vault Key sin cifrar y credenciales legibles |
-| Servidor | Email, Auth Hash recibido, hashes bcrypt, blobs, IVs, JWT y metadatos | Contrasena maestra, Master Key, Encryption Key y JSON de credenciales |
+| Red | Email, salt, iteraciones, Auth Hash, blobs Base64, cookie de sesion, primeros 5 chars SHA-1 (HIBP) | Contrasena maestra, Vault Key sin cifrar, credenciales legibles, hash completo SHA-1 |
+| Servidor | Email, Auth Hash recibido, hashes bcrypt, blobs, IVs, JWT y metadatos | Contrasena maestra, Master Key, Encryption Key, JSON de credenciales, hash SHA-1 |
 | Supabase | Hash bcrypt, salt, iteraciones, `wrapped_vault_key`, `wrap_iv`, IVs y ciphertexts | Credenciales legibles y claves sin envolver |
 
-## 10. Comprobacion manual
+## 14. Comprobacion manual
 
 Para revisar el almacenamiento, abre el SQL Editor de Supabase y ejecuta:
 
@@ -368,8 +471,10 @@ Los campos `auth_hash_hashed`, `wrapped_vault_key`, `wrap_iv`, `iv` y `ciphertex
 
 Para revisar la red, abre DevTools, entra en **Network** y observa las peticiones de registro, login y `/api/vault`. Comprueba que los cuerpos contienen solo material derivado o cifrado.
 
-## 11. Limitacion importante
+## 15. Limitacion importante
 
 Este modelo protege los datos frente a un servidor que almacena o transporta la informacion, pero el servidor de frontend entrega el JavaScript que ejecuta el cifrado. Si ese JavaScript fuese sustituido por una version maliciosa antes de llegar al navegador, podria capturar datos antes del cifrado.
 
 La CSP, SRI, la revision del codigo y una cadena de despliegue confiable reducen ese riesgo, pero no lo eliminan completamente.
+
+Ver también: sección "Limitaciones Conocidas" en el README.
