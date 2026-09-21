@@ -5,10 +5,7 @@ import {
   loginWithMasterPassword,
   logoutFromMemory,
   registerWithMasterPassword,
-  resumeSession,
-  tryCheckSession,
 } from "./auth";
-import type { SessionResponse } from "./api";
 import {
   Credential,
   createCredential,
@@ -781,8 +778,6 @@ function App() {
   const [email, setEmail] = useState("");
   const [masterPassword, setMasterPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
-  const [sessionData, setSessionData] = useState<SessionResponse | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
   const [decrypting, setDecrypting] = useState(false);
   const [credentials, setCredentials] = useState<
     Array<Credential & { id: number | string }>
@@ -826,22 +821,6 @@ function App() {
     return ids;
   }, [healthReport]);
 
-  // Comprueba si existe una cookie de sesión válida al montar la aplicación.
-  useEffect(() => {
-    let cancelled = false;
-    tryCheckSession().then((data) => {
-      if (cancelled) return;
-      if (data) {
-        setSessionData(data);
-        setEmail(data.email);
-        setShowAccess(true);
-        setView("login");
-      }
-      setCheckingSession(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
   useEffect(() => {
     const modal = credentialModalRef.current;
     if (!modal) return;
@@ -867,15 +846,6 @@ function App() {
         await registerWithMasterPassword(email, masterPassword);
         setView("login");
         setMessage("Cuenta creada. Inicia sesión para abrir tu bóveda.");
-      } else if (sessionData) {
-        // La sesión sigue activa: solo re-derivamos las claves sin repetir el login HTTP.
-        await resumeSession(masterPassword, sessionData);
-        setAuthenticated(true);
-        setDecrypting(true);
-        setCredentials(await listCredentials());
-        setDecrypting(false);
-        setSessionData(null);
-        setMessage("Bóveda desbloqueada en memoria.");
       } else {
         await loginWithMasterPassword(email, masterPassword);
         setAuthenticated(true);
@@ -886,9 +856,6 @@ function App() {
       }
       setMasterPassword("");
     } catch (submitError) {
-      // Si la sesión expiró mientras estaba en la pantalla de re-unlock, limpiar sessionData
-      // para que el próximo intento use el flujo normal de login.
-      if (sessionData) setSessionData(null);
       setError(
         submitError instanceof Error
           ? submitError.message
@@ -921,7 +888,6 @@ function App() {
       setIsChangePasswordModalOpen(false);
       setRevealedId(null);
       setDeletingId(null);
-      setSessionData(null);
       setBusy(false);
     }
   }
@@ -1062,9 +1028,6 @@ function App() {
       setBusy(false);
     }
   }
-
-  // Mientras se comprueba si hay una sesión activa, no se renderiza nada para evitar un flash.
-  if (checkingSession) return null;
 
   if (!authenticated && !showAccess)
     return (

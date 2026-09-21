@@ -11,7 +11,6 @@ import {
 import { generateVaultKey, unwrapVaultKey, wrapVaultKey } from './crypto/vault-key.js';
 import {
   changeMasterPasswordRequest,
-  checkSession,
   getAuthSalt,
   loginAccount,
   logoutAccount,
@@ -127,29 +126,4 @@ export async function logoutFromMemory() {
     activeKdfSalt = null;
     activeKdfIterations = null;
   }
-}
-
-/** Comprueba si existe una sesión válida (cookie httpOnly) y devuelve los datos de la cuenta. */
-export async function tryCheckSession() {
-  try {
-    return await checkSession();
-  } catch {
-    return null;
-  }
-}
-
-/** Reabre la bóveda tras un refresh usando la sesión existente sin repetir el login HTTP. */
-export async function resumeSession(
-  masterPassword: string,
-  sessionData: { kdfSalt: string; kdfIterations: number; wrappedVaultKey: string; wrapIv: string },
-) {
-  const passwordError = validateMasterPassword(masterPassword);
-  if (passwordError) throw new Error(passwordError);
-
-  const salt = base64ToBytes(sessionData.kdfSalt);
-  const masterKey = await deriveMasterKey(masterPassword, salt, sessionData.kdfIterations);
-  const { encryptionKey } = await deriveSubkeys(masterKey);
-  vaultKey = await unwrapVaultKey(encryptionKey, sessionData.wrapIv, sessionData.wrappedVaultKey);
-  activeKdfSalt = salt;
-  activeKdfIterations = sessionData.kdfIterations;
 }

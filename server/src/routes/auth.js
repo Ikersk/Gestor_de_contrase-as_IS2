@@ -218,28 +218,6 @@ function createAuthRouter({ dbPool }) {
     }
   });
 
-  // GET /session: comprueba si la cookie de sesión sigue siendo válida y devuelve los blobs necesarios
-  // para que el cliente pueda pedir la contraseña maestra y reabrir la bóveda sin pasar por /login.
-  router.get('/session', requireAuth({ dbPool }), async (request, response, next) => {
-    try {
-      const result = await dbPool.query(
-        'SELECT email, wrapped_vault_key, wrap_iv, kdf_salt, kdf_iterations FROM users WHERE id = $1',
-        [request.user.id],
-      );
-      const user = result.rows[0];
-      if (!user) return response.status(401).json({ error: 'Authentication required' });
-      return response.json({
-        email: user.email,
-        wrappedVaultKey: user.wrapped_vault_key,
-        wrapIv: user.wrap_iv,
-        kdfSalt: user.kdf_salt,
-        kdfIterations: user.kdf_iterations,
-      });
-    } catch (error) {
-      return next(error);
-    }
-  });
-
   // POST /logout: invalida la cookie en el navegador; la proteccion de la ruta llegara con requireAuth.
   router.post('/logout', requireAuth({ dbPool }), (_request, response) => {
     response.clearCookie(JWT_COOKIE_NAME, getSessionCookieOptions());
