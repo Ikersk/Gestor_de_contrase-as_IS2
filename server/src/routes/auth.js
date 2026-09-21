@@ -7,6 +7,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
 const {
   changeMasterPasswordSchema,
+  deleteAccountSchema,
   loginSchema,
   parsePayload,
   registerSchema,
@@ -222,6 +223,47 @@ function createAuthRouter({ dbPool }) {
   router.post('/logout', requireAuth({ dbPool }), (_request, response) => {
     response.clearCookie(JWT_COOKIE_NAME, getSessionCookieOptions());
     response.sendStatus(204);
+  });
+
+  const deleteAccountLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many account deletion attempts. Try again later.' },
+  });
+
+  // DELETE /account: elimina la cuenta y todos sus vault_items en una transaccion.
+  router.delete('/account', deleteAccountLimiter, requireAuth({ dbPool }), async (request, response, next) => {
+    const payload = parsePayload(deleteAccountSchema, request.body);
+    if (!payload) {
+      return response.status(400).json({ error: 'Invalid delete account payload' });
+    }
+
+    try {
+      await withTransaction(dbPool, async (client) => {
+        const result = await client.query(
+          'SELECT auth_hash_hashed FROM users WHERE id = $1 FOR UPDATE',
+          [request.user.id],
+        );
+        const user = result.rows[0];
+        const valid = user && await bcrypt.compare(payload.authHash, user.auth_hash_hashed);
+        if (!valid) {
+          const error = new Error('Invalid credentials');
+          error.statusCode = 401;
+          throw error;
+        }
+
+        await client.query('DELETE FROM vault_items WHERE user_id = $1', [request.user.id]);
+        await client.query('DELETE FROM users WHERE id = $1', [request.user.id]);
+      });
+
+      response.clearCookie(JWT_COOKIE_NAME, getSessionCookieOptions());
+      return response.sendStatus(204);
+    } catch (error) {
+      if (error.statusCode === 401) return response.status(401).json({ error: 'Invalid credentials' });
+      return next(error);
+    }
   });
 
   // Evita exponer detalles de base de datos o criptografia en respuestas de error.

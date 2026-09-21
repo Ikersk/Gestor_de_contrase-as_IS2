@@ -55,6 +55,10 @@ const changeMasterPasswordSchema = z.object({
   wrapIv: base64String({ minBytes: WRAP_IV_BYTES, maxBytes: WRAP_IV_BYTES }),
 });
 
+const deleteAccountSchema = z.object({
+  authHash: base64String({ minBytes: AUTH_HASH_BYTES, maxBytes: AUTH_HASH_BYTES }),
+});
+
 const vaultItemSchema = z.object({
   iv: base64String({ minBytes: WRAP_IV_BYTES, maxBytes: WRAP_IV_BYTES }),
   ciphertext: base64String({ minBytes: 16, maxBytes: MAX_CIPHERTEXT_BYTES }),
@@ -71,5 +75,6 @@ module.exports = {
   registerSchema,
   loginSchema,
   changeMasterPasswordSchema,
+  deleteAccountSchema,
   vaultItemSchema,
 };
