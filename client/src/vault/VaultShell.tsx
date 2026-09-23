@@ -84,10 +84,20 @@ export function VaultShell({
 
   return (
     <main
-      className="landing-page relative flex h-screen min-h-[560px] flex-col overflow-hidden bg-abyss font-sans text-lg text-ink"
+      className="landing-page relative flex h-screen min-h-[560px] flex-col overflow-hidden bg-vault-page font-sans text-lg text-ink"
       style={{ "--lp-mesh-b": "transparent" } as React.CSSProperties}
     >
       <TextureLayers />
+
+      {/* Marca de agua de fondo (solo se ve en el fondo, paneles opacos la tapan) */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-0 flex justify-center overflow-hidden"
+      >
+        <span className="translate-y-[28%] select-none font-display text-[42vw] font-bold leading-none tracking-tighter text-ink opacity-[var(--lp-watermark-opacity)]">
+          ARCA
+        </span>
+      </div>
 
       <header className="relative z-10 flex shrink-0 items-center justify-between border-b border-line bg-vault-glass-strong px-4 py-3 backdrop-blur-md lg:px-5">
         <div className="flex items-center gap-4">

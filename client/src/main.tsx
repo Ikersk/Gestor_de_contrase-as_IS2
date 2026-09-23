@@ -597,7 +597,6 @@ function App() {
         setDecrypting(true);
         setCredentials(await listCredentials());
         setDecrypting(false);
-        setMessage("Bóveda desbloqueada en memoria.");
       }
       setMasterPassword("");
       setConfirmMasterPassword("");
@@ -843,6 +842,14 @@ function App() {
     return (
       <main className="landing-page relative isolate">
         <TextureLayers />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-0 flex justify-center overflow-hidden"
+        >
+          <span className="translate-y-[28%] select-none font-display text-[42vw] font-bold leading-none tracking-tighter text-ink opacity-[var(--lp-watermark-opacity)]">
+            ARCA
+          </span>
+        </div>
         <div className="relative z-10 min-h-screen">
           <div className="relative z-20 w-full border-b border-line bg-[var(--lp-topbar)]">
             <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-6">

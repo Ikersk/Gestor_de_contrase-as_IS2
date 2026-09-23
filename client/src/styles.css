@@ -236,7 +236,7 @@ h1, h2, h3 {
 .auth-card-top {
   display: flex;
   align-items: center;
-  margin-bottom: 64px;
+  margin-bottom: 24px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -696,7 +696,7 @@ h1, h2, h3 {
 @media (max-width: 560px) {
   .auth-page { width: min(100% - 32px, 620px); }
   .auth-card { margin: 48px auto; padding: 24px; }
-  .auth-card-top { margin-bottom: 48px; }
+  .auth-card-top { margin-bottom: 20px; }
   .credential-modal { padding: 20px; }
 }
 

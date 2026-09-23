@@ -53,6 +53,7 @@
   --lp-terminal-bg: var(--lp-demo-bg);
   --lp-watermark-opacity: 0.03;
   --lp-topbar: #111114;
+  --vault-page-bg: var(--lp-bg);
 
   /* Vault glass — legible on pure black */
   --vault-glass: rgba(0, 0, 0, 0.48);
@@ -95,7 +96,8 @@
   --lp-dot: rgba(0, 0, 0, 0.42);
   --lp-dot-opacity: 1;
   --lp-dot-overlay: rgba(0, 0, 0, 0.55);
-  --lp-dot-overlay-opacity: 0.25;
+  /* Como oscuro: sin puntos encima de las ventanas — solo TextureLayers en el fondo */
+  --lp-dot-overlay-opacity: 0;
   --lp-grain-opacity: 0.02;
   --lp-scanline: rgba(0, 0, 0, 0.04);
   --lp-mesh-a: rgba(37, 99, 235, 0.06);
@@ -105,15 +107,17 @@
   --lp-terminal-bg: var(--lp-demo-bg);
   --lp-watermark-opacity: 0.1;
   --lp-topbar: #ffffff;
+  --vault-page-bg: #d1d1d6;
 
-  /* Vault light — solid surfaces, no wash-through */
-  --vault-glass: #f7f7f8;
+  /* Vault light — fully opaque windows (no alpha), clear separation from page */
+  --vault-glass: #ffffff;
   --vault-glass-strong: #ffffff;
   --vault-input: #ffffff;
-  --vault-soft: #ebebef;
-  --vault-soft-2: #e0e0e6;
+  --vault-soft: #f0f0f3;
+  --vault-soft-2: #e4e4e9;
   --vault-track: #a1a1aa;
-  --vault-panel: #d0d0d7;
+  /* Igual que oscuro: la columna de la lista es el fondo (ve TextureLayers), no una ventana */
+  --vault-panel: transparent;
   --vault-accent-ink: #1e40af;
   --vault-accent-deep: #1d4ed8;
   --vault-danger-ink: #dc2626;
@@ -138,6 +142,9 @@
 }
 
 /* ── Vault surfaces (theme-aware) ── */
+@utility bg-vault-page {
+  background-color: var(--vault-page-bg);
+}
 @utility bg-vault-glass {
   background-color: var(--vault-glass);
 }
