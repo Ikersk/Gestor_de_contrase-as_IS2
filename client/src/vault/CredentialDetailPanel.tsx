@@ -5,6 +5,7 @@ import { CopyButton } from "./CopyButton";
 import { ScrambleText } from "./ScrambleText";
 import { TotpBlock } from "./TotpBlock";
 import { getFaviconUrl } from "./CredentialCard";
+import { analyzeUrl } from "../anti-phishing";
 
 interface CredentialDetailPanelProps {
   credential: DecryptedCredential | null;
@@ -295,18 +296,37 @@ export function CredentialDetailPanel({
             {activeUrls.length > 0 && (
               <div>
                 <FieldLabel>URLs</FieldLabel>
-                <div className="space-y-1.5">
-                  {activeUrls.map((url, index) => (
-                    <a
-                      key={index}
-                      href={url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate rounded-lg border border-line bg-vault-input px-3 py-2 font-mono text-base text-vault-accent transition-all hover:border-blue-500/50 hover:bg-vault-accent-softer hover:shadow-[0_0_16px_rgba(37,99,235,0.12)]"
-                    >
-                      {url}
-                    </a>
-                  ))}
+                <div className="space-y-2">
+                  {activeUrls.map((url, index) => {
+                    const report = analyzeUrl(url);
+                    return (
+                      <div key={index} className="space-y-1">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block truncate rounded-lg border border-line bg-vault-input px-3 py-2 font-mono text-base text-vault-accent transition-all hover:border-blue-500/50 hover:bg-vault-accent-softer hover:shadow-[0_0_16px_rgba(37,99,235,0.12)]"
+                        >
+                          {url}
+                        </a>
+                        {report && report.riskLevel === "danger" && (
+                          <div className="rounded-lg border border-red-500/50 bg-red-950/20 px-3 py-1.5 font-mono text-xs text-red-400">
+                            <strong>{report.typosquatTarget ? `Posible imitación de ${report.typosquatTarget}` : report.threatTitle}:</strong> {report.threatDescription || "Esta dirección es riesgosa o fraudulenta."}
+                          </div>
+                        )}
+                        {report && report.riskLevel === "warning" && (
+                          <div className="rounded-lg border border-amber-500/50 bg-amber-950/20 px-3 py-1.5 font-mono text-xs text-amber-400">
+                            <strong>HTTP no seguro:</strong> Conexión no cifrada vulnerable a intercepción.
+                          </div>
+                        )}
+                        {report && report.riskLevel === "safe" && report.isOfficialVerified && (
+                          <div className="font-mono text-[13px] text-emerald-400">
+                            ✓ Servicio oficial verificado ({report.hostname})
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
