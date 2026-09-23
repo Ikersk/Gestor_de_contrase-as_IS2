@@ -94,7 +94,7 @@ export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
         {/* CTA final */}
         <div className="lp-reveal" style={{ transitionDelay: "200ms" }}>
           <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue-electric">
-            Social proof · stack verificable
+          stack verificable
           </p>
           <h2
             id="stack-title"
@@ -107,14 +107,13 @@ export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
             puedes auditar.
           </h2>
           <p className="mt-5 max-w-md text-[15px] leading-relaxed text-ink-dim">
-            Abre DevTools: no verás contraseñas ni claves viajando. Solo IVs,
+             // Abre DevTools: no verás contraseñas ni claves viajando. Solo IVs,
             nonces y ciphertext autenticado. Eso es Arca.
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-5">
             <GlowCta onClick={onAccess}>Empezar en silencio</GlowCta>
             <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
-              sin tarjeta · sin telemetría
             </span>
           </div>
 

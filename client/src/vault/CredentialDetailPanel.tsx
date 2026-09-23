@@ -118,7 +118,7 @@ export function CredentialDetailPanel({
             </svg>
           </div>
           <p className="font-mono text-[15px] uppercase tracking-[0.24em] text-vault-accent">
-            // awaiting_selection
+            // esperando selección
           </p>
           <h3 className="font-display text-2xl text-ink">Selecciona una credencial</h3>
           <p className="max-w-[24ch] text-lg text-ink-dim">

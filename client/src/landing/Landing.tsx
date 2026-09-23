@@ -71,7 +71,7 @@ export function Landing({ onAccess }: LandingProps) {
       <footer className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-3 border-t border-line px-6 py-8 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint sm:flex-row sm:items-center sm:justify-between">
         <span>arca / privacidad primero</span>
         <span className="text-ink-dim">
-          construido para guardar lo importante · <span className="text-blue-electric">zk</span>
+          construido para guardar lo importante<span className="text-blue-electric"></span>
         </span>
       </footer>
     </div>

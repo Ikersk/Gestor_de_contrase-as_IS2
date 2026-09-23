@@ -41,9 +41,9 @@
   --lp-blue-soft: #93c5fd;
   --lp-blue-mid: #60a5fa;
   --lp-dot: rgba(255, 255, 255, 0.14);
-  --lp-dot-opacity: 0.35;
+  --lp-dot-opacity: 0.85;
   --lp-dot-overlay: rgba(255, 255, 255, 0.55);
-  --lp-dot-overlay-opacity: 0.1;
+  --lp-dot-overlay-opacity: 0.0;
   --lp-grain-opacity: 0.055;
   --lp-scanline: rgba(0, 0, 0, 0.22);
   --lp-mesh-a: rgba(37, 99, 235, 0.16);
@@ -95,7 +95,7 @@
   --lp-dot: rgba(0, 0, 0, 0.42);
   --lp-dot-opacity: 1;
   --lp-dot-overlay: rgba(0, 0, 0, 0.55);
-  --lp-dot-overlay-opacity: 0.2;
+  --lp-dot-overlay-opacity: 0.25;
   --lp-grain-opacity: 0.02;
   --lp-scanline: rgba(0, 0, 0, 0.04);
   --lp-mesh-a: rgba(37, 99, 235, 0.06);

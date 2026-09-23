@@ -101,7 +101,7 @@ const pillars: Pillar[] = [
     id: "session",
     index: "05",
     title: "Sesión endurecida",
-    body: "JWT HS256 en cookie httpOnly + SameSite=Strict, rate-limit agresivo y CSP estricta vía Helmet. El perímetro reacciona como una caja fuerte.",
+    body: "Rate-limit agresivo y CSP estricta vía Helmet. El perímetro reacciona como una caja fuerte.",
     metric: "8 h",
     metricLabel: "cookie httpOnly · rate-limit 5/15min",
     span: "sm:col-span-1 lg:col-span-3",
@@ -139,11 +139,11 @@ export function FeaturesBento({ reveal }: FeaturesBentoProps) {
           className="font-display text-[clamp(36px,5vw,56px)] font-semibold leading-[1.02] tracking-[-0.04em] text-ink"
         >
           Diseñada para que{" "}
-          <span className="text-blue-soft">incluso nosotros</span> no podamos leerte.
+          <span className="text-blue-electric">incluso nosotros</span> no podamos leerte.
         </h2>
         <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-ink-dim">
-          Cada capa del sistema asume un backend hostil. Lo que viaja por la red es
-          ruido cifrado; la semántica vive solo en tu dispositivo.
+          // Cada capa del sistema asume un backend hostil. Lo que viaja por la red es
+          ruido cifrado; las claves viven solo en tu dispositivo.
         </p>
       </div>
 
