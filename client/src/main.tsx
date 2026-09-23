@@ -841,50 +841,60 @@ function App() {
     );
   if (!authenticated)
     return (
-      <main className="auth-page landing-page relative isolate">
+      <main className="landing-page relative isolate">
         <TextureLayers />
-        <div className="relative z-10">
-          <header className="site-header">
-            <a className="brand" href="/" aria-label="Arca, inicio">
-              <span className="brand-symbol">A</span>
-              <span>arca</span>
-            </a>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <button
-                className="back-link"
-                type="button"
-                onClick={() => setShowAccess(false)}
+        <div className="relative z-10 min-h-screen">
+          <div className="relative z-20 w-full border-b border-line bg-[var(--lp-topbar)]">
+            <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-6">
+              <a
+                className="group inline-flex items-center gap-2.5 font-display text-[17px] font-semibold tracking-[0.2em] uppercase text-ink"
+                href="/"
+                aria-label="Arca, inicio"
               >
-                Volver al inicio
-              </button>
-              <ThemeSwitcher />
-            </div>
-          </header>
-          <AuthPanel
-            view={view}
-            setView={(nextView) => {
-              setView(nextView);
-              setError("");
-              setMessage("");
-              setConfirmMasterPassword("");
-              setShowMasterPassword(false);
-              setShowConfirmMasterPassword(false);
-            }}
-            email={email}
-            setEmail={setEmail}
-            masterPassword={masterPassword}
-            setMasterPassword={setMasterPassword}
-            confirmMasterPassword={confirmMasterPassword}
-            setConfirmMasterPassword={setConfirmMasterPassword}
-            showMasterPassword={showMasterPassword}
-            setShowMasterPassword={setShowMasterPassword}
-            showConfirmMasterPassword={showConfirmMasterPassword}
-            setShowConfirmMasterPassword={setShowConfirmMasterPassword}
-            busy={busy}
-            message={message}
-            error={error}
-            onSubmit={handleSubmit}
-          />
+                <span className="grid h-8 w-8 place-items-center rounded-md bg-blue-electric font-mono text-[13px] font-bold tracking-normal text-abyss shadow-[0_0_18px_rgba(37,99,235,0.45)] transition-shadow group-hover:shadow-[0_0_28px_rgba(37,99,235,0.7)]">
+                  A
+                </span>
+                arca
+              </a>
+              <nav className="flex items-center gap-7 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-dim" aria-label="Navegación">
+                <button
+                  className="rounded-full border border-line px-4 py-1.5 text-ink transition hover:border-glow hover:text-blue-electric"
+                  type="button"
+                  onClick={() => setShowAccess(false)}
+                >
+                  Volver al inicio
+                </button>
+                <ThemeSwitcher />
+              </nav>
+            </header>
+          </div>
+          <div className="auth-page">
+            <AuthPanel
+              view={view}
+              setView={(nextView) => {
+                setView(nextView);
+                setError("");
+                setMessage("");
+                setConfirmMasterPassword("");
+                setShowMasterPassword(false);
+                setShowConfirmMasterPassword(false);
+              }}
+              email={email}
+              setEmail={setEmail}
+              masterPassword={masterPassword}
+              setMasterPassword={setMasterPassword}
+              confirmMasterPassword={confirmMasterPassword}
+              setConfirmMasterPassword={setConfirmMasterPassword}
+              showMasterPassword={showMasterPassword}
+              setShowMasterPassword={setShowMasterPassword}
+              showConfirmMasterPassword={showConfirmMasterPassword}
+              setShowConfirmMasterPassword={setShowConfirmMasterPassword}
+              busy={busy}
+              message={message}
+              error={error}
+              onSubmit={handleSubmit}
+            />
+          </div>
         </div>
       </main>
     );

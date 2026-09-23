@@ -52,6 +52,7 @@
   --lp-glow-strong: rgba(37, 99, 235, 0.55);
   --lp-terminal-bg: var(--lp-demo-bg);
   --lp-watermark-opacity: 0.03;
+  --lp-topbar: #111114;
 
   /* Vault glass — legible on pure black */
   --vault-glass: rgba(0, 0, 0, 0.48);
@@ -103,6 +104,7 @@
   --lp-glow-strong: rgba(29, 78, 216, 0.45);
   --lp-terminal-bg: var(--lp-demo-bg);
   --lp-watermark-opacity: 0.1;
+  --lp-topbar: #ffffff;
 
   /* Vault light — solid surfaces, no wash-through */
   --vault-glass: #f7f7f8;

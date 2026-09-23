@@ -217,8 +217,8 @@ h1, h2, h3 {
 }
 
 /* ── Auth pages ── */
-.auth-page { min-height: 100vh; background: transparent; }
-.auth-page .site-header { border-bottom: 1px solid var(--border); }
+.auth-page { background: transparent; }
+.auth-page .site-header { border-bottom: 0; }
 .auth-page .auth-card {
   position: relative;
   z-index: 1;

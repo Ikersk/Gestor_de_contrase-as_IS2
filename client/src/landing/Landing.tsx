@@ -30,35 +30,37 @@ export function Landing({ onAccess }: LandingProps) {
         </span>
       </div>
 
-      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-6">
-        <a
-          className="group inline-flex items-center gap-2.5 font-display text-[17px] font-semibold tracking-[0.2em] uppercase text-ink"
-          href="/"
-          aria-label="Arca, inicio"
-        >
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-blue-electric font-mono text-[13px] font-bold tracking-normal text-abyss shadow-[0_0_18px_rgba(37,99,235,0.45)] transition-shadow group-hover:shadow-[0_0_28px_rgba(37,99,235,0.7)]">
-            A
-          </span>
-          arca
-        </a>
-
-        <nav className="flex items-center gap-7 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-dim" aria-label="Navegación principal">
-          <a className="hidden transition hover:text-blue-electric sm:inline" href="#arquitectura">
-            Arquitectura
-          </a>
-          <a className="hidden transition hover:text-blue-electric sm:inline" href="#stack">
-            Stack
-          </a>
-          <button
-            className="rounded-full border border-line px-4 py-1.5 text-ink transition hover:border-glow hover:text-blue-electric"
-            type="button"
-            onClick={onAccess}
+      <div className="relative z-20 w-full border-b border-line bg-[var(--lp-topbar)]">
+        <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-6">
+          <a
+            className="group inline-flex items-center gap-2.5 font-display text-[17px] font-semibold tracking-[0.2em] uppercase text-ink"
+            href="/"
+            aria-label="Arca, inicio"
           >
-            Entrar
-          </button>
-          <ThemeSwitcher />
-        </nav>
-      </header>
+            <span className="grid h-8 w-8 place-items-center rounded-md bg-blue-electric font-mono text-[13px] font-bold tracking-normal text-abyss shadow-[0_0_18px_rgba(37,99,235,0.45)] transition-shadow group-hover:shadow-[0_0_28px_rgba(37,99,235,0.7)]">
+              A
+            </span>
+            arca
+          </a>
+
+          <nav className="flex items-center gap-7 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-dim" aria-label="Navegación principal">
+            <a className="hidden transition hover:text-blue-electric sm:inline" href="#arquitectura">
+              Arquitectura
+            </a>
+            <a className="hidden transition hover:text-blue-electric sm:inline" href="#stack">
+              Stack
+            </a>
+            <button
+              className="rounded-full border border-line px-4 py-1.5 text-ink transition hover:border-glow hover:text-blue-electric"
+              type="button"
+              onClick={onAccess}
+            >
+              Entrar
+            </button>
+            <ThemeSwitcher />
+          </nav>
+        </header>
+      </div>
 
       <main>
         <Hero onAccess={onAccess} reveal={reveal} />
