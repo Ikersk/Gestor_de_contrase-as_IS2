@@ -12,14 +12,14 @@ type Pillar = {
   span: string;
   delay: string;
   icon: React.ReactNode;
-  accent: "cyan" | "acid" | "violet";
+  accent: "electric" | "soft" | "deep";
   extra?: { label: string; value: string }[];
 };
 
 const ICON_CLASS = {
-  cyan: "border-cyan-electric/40 bg-cyan-electric/10 text-cyan-electric",
-  acid: "border-acid/40 bg-acid/10 text-acid",
-  violet: "border-violet-deep/50 bg-violet-deep/15 text-violet-deep",
+  electric: "border-blue-electric/40 bg-blue-electric/10 text-blue-electric",
+  soft: "border-blue-soft/40 bg-blue-soft/10 text-blue-soft",
+  deep: "border-blue-deep/50 bg-blue-deep/15 text-blue-deep",
 } as const;
 
 const pillars: Pillar[] = [
@@ -32,7 +32,7 @@ const pillars: Pillar[] = [
     metricLabel: "iteraciones PBKDF2-SHA256",
     span: "sm:col-span-2 lg:col-span-4 lg:row-span-2",
     delay: "0ms",
-    accent: "cyan",
+    accent: "electric",
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
@@ -54,7 +54,7 @@ const pillars: Pillar[] = [
     metricLabel: "IV 12B · Web Crypto API",
     span: "sm:col-span-2 lg:col-span-2",
     delay: "80ms",
-    accent: "acid",
+    accent: "soft",
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <rect x="3" y="11" width="18" height="11" rx="2" />
@@ -72,7 +72,7 @@ const pillars: Pillar[] = [
     metricLabel: "prefijo SHA-1 · nunca el hash entero",
     span: "sm:col-span-2 lg:col-span-2",
     delay: "160ms",
-    accent: "violet",
+    accent: "deep",
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -90,7 +90,7 @@ const pillars: Pillar[] = [
     metricLabel: "wrapped · nunca en claro",
     span: "sm:col-span-1 lg:col-span-3",
     delay: "240ms",
-    accent: "cyan",
+    accent: "electric",
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
@@ -106,7 +106,7 @@ const pillars: Pillar[] = [
     metricLabel: "cookie httpOnly · rate-limit 5/15min",
     span: "sm:col-span-1 lg:col-span-3",
     delay: "320ms",
-    accent: "acid",
+    accent: "soft",
     icon: (
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -131,7 +131,7 @@ export function FeaturesBento({ reveal }: FeaturesBentoProps) {
       />
 
       <div className={`lp-reveal relative mb-12 max-w-2xl ${reveal("bento")}`}>
-        <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-cyan-electric">
+        <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue-electric">
           La arquitectura · 03 pilares
         </p>
         <h2
@@ -139,7 +139,7 @@ export function FeaturesBento({ reveal }: FeaturesBentoProps) {
           className="font-display text-[clamp(36px,5vw,56px)] font-semibold leading-[1.02] tracking-[-0.04em] text-ink"
         >
           Diseñada para que{" "}
-          <span className="text-acid">incluso nosotros</span> no podamos leerte.
+          <span className="text-blue-soft">incluso nosotros</span> no podamos leerte.
         </h2>
         <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-ink-dim">
           Cada capa del sistema asume un backend hostil. Lo que viaja por la red es
@@ -161,11 +161,11 @@ export function FeaturesBento({ reveal }: FeaturesBentoProps) {
               className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
               style={{
                 background:
-                  p.accent === "acid"
-                    ? "radial-gradient(circle, rgba(217,249,157,0.35), transparent 65%)"
-                    : p.accent === "violet"
-                      ? "radial-gradient(circle, rgba(124,58,237,0.4), transparent 65%)"
-                      : "radial-gradient(circle, rgba(6,182,212,0.4), transparent 65%)",
+                  p.accent === "soft"
+                    ? "radial-gradient(circle, rgba(96,165,250,0.35), transparent 65%)"
+                    : p.accent === "deep"
+                      ? "radial-gradient(circle, rgba(59,130,246,0.4), transparent 65%)"
+                      : "radial-gradient(circle, rgba(37,99,235,0.4), transparent 65%)",
               }}
             />
 
@@ -190,7 +190,7 @@ export function FeaturesBento({ reveal }: FeaturesBentoProps) {
             <div className="relative mt-6 border-t border-line pt-4">
               <p
                 className={`font-mono text-lg font-bold tracking-tight ${
-                  p.accent === "acid" ? "text-acid" : p.accent === "violet" ? "text-violet-deep" : "text-cyan-electric"
+                  p.accent === "soft" ? "text-blue-soft" : p.accent === "deep" ? "text-blue-deep" : "text-blue-electric"
                 }`}
               >
                 {p.metric}

@@ -9,11 +9,10 @@
   --color-ink: var(--lp-ink);
   --color-ink-dim: var(--lp-ink-dim);
   --color-ink-faint: var(--lp-ink-faint);
-  --color-cyan-electric: #06b6d4;
-  --color-cyan-deep: #0891b2;
-  --color-violet-deep: #7c3aed;
-  --color-acid: var(--lp-acid);
-  --color-acid-dim: var(--lp-acid-dim);
+  --color-blue-electric: #2563eb;
+  --color-blue-deep: #1d4ed8;
+  --color-blue-soft: var(--lp-blue-soft);
+  --color-blue-mid: var(--lp-blue-mid);
 
   --font-display: "Clash Display", "Satoshi", "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Courier New", monospace;
@@ -28,26 +27,31 @@
 /* ── Dark core (default) ── */
 .landing-page {
   --lp-bg: #050505;
-  --lp-surface: rgba(255, 255, 255, 0.045);
-  --lp-surface-2: rgba(255, 255, 255, 0.07);
+  --lp-demo-bg: rgba(12, 12, 16, 0.92);
+  --lp-demo-header: rgba(28, 28, 34, 0.95);
+  --lp-demo-input: rgba(0, 0, 0, 0.7);
+  --lp-demo-block: rgba(0, 0, 0, 0.78);
+  --lp-surface: var(--lp-demo-bg);
+  --lp-surface-2: var(--lp-demo-header);
   --lp-line: rgba(255, 255, 255, 0.09);
   --lp-line-strong: rgba(255, 255, 255, 0.18);
   --lp-ink: #f4f4f5;
   --lp-ink-dim: #a1a1aa;
   --lp-ink-faint: #71717a;
-  --lp-acid: #d9f99d;
-  --lp-acid-dim: #a3e635;
+  --lp-blue-soft: #93c5fd;
+  --lp-blue-mid: #60a5fa;
   --lp-dot: rgba(255, 255, 255, 0.14);
   --lp-dot-opacity: 0.35;
   --lp-dot-overlay: rgba(255, 255, 255, 0.55);
   --lp-dot-overlay-opacity: 0.1;
   --lp-grain-opacity: 0.055;
   --lp-scanline: rgba(0, 0, 0, 0.22);
-  --lp-mesh-a: rgba(6, 182, 212, 0.16);
-  --lp-mesh-b: rgba(124, 58, 237, 0.14);
-  --lp-glow: rgba(6, 182, 212, 0.35);
-  --lp-glow-strong: rgba(6, 182, 212, 0.55);
-  --lp-terminal-bg: rgba(0, 0, 0, 0.55);
+  --lp-mesh-a: rgba(37, 99, 235, 0.16);
+  --lp-mesh-b: rgba(37, 99, 235, 0.1);
+  --lp-glow: rgba(37, 99, 235, 0.35);
+  --lp-glow-strong: rgba(37, 99, 235, 0.55);
+  --lp-terminal-bg: var(--lp-demo-bg);
+  --lp-watermark-opacity: 0.03;
 
   /* Vault glass — legible on pure black */
   --vault-glass: rgba(0, 0, 0, 0.48);
@@ -57,16 +61,16 @@
   --vault-soft-2: rgba(255, 255, 255, 0.08);
   --vault-track: rgba(255, 255, 255, 0.12);
   --vault-panel: transparent;
-  --vault-accent-ink: #67e8f9;
-  --vault-accent-deep: #22d3ee;
+  --vault-accent-ink: #60a5fa;
+  --vault-accent-deep: #3b82f6;
   --vault-danger-ink: #f87171;
   --vault-warn-ink: #fcd34d;
   --vault-ok-ink: #bef264;
-  --vault-accent-soft: rgba(6, 182, 212, 0.16);
-  --vault-accent-softer: rgba(6, 182, 212, 0.1);
-  --vault-danger-soft: rgba(239, 68, 68, 0.18);
-  --vault-warn-soft: rgba(245, 158, 11, 0.18);
-  --vault-ok-soft: rgba(163, 230, 53, 0.12);
+  --vault-accent-soft: rgba(37, 99, 235, 0.13);
+  --vault-accent-softer: rgba(37, 99, 235, 0.3);
+  --vault-danger-soft: rgba(239, 68, 68, 0.3);
+  --vault-warn-soft: rgba(245, 158, 11, 0.3);
+  --vault-ok-soft: rgba(163, 230, 53, 0.3);
 
   color-scheme: dark;
 }
@@ -74,26 +78,31 @@
 /* ── Light variant ── */
 [data-theme="light"] .landing-page {
   --lp-bg: #b8b8bf;
-  --lp-surface: rgba(255, 255, 255, 0.3);
-  --lp-surface-2: rgba(255, 255, 255, 0.45);
+  --lp-demo-bg: rgba(255, 255, 255, 0.94);
+  --lp-demo-header: rgba(248, 248, 250, 0.97);
+  --lp-demo-input: rgba(255, 255, 255, 0.88);
+  --lp-demo-block: rgba(255, 255, 255, 0.9);
+  --lp-surface: var(--lp-demo-bg);
+  --lp-surface-2: var(--lp-demo-header);
   --lp-line: rgba(0, 0, 0, 0.22);
   --lp-line-strong: rgba(0, 0, 0, 0.36);
   --lp-ink: #121214;
   --lp-ink-dim: #27272a;
   --lp-ink-faint: #3f3f46;
-  --lp-acid: #3f6212;
-  --lp-acid-dim: #365314;
+  --lp-blue-soft: #1e40af;
+  --lp-blue-mid: #1d4ed8;
   --lp-dot: rgba(0, 0, 0, 0.42);
   --lp-dot-opacity: 1;
   --lp-dot-overlay: rgba(0, 0, 0, 0.55);
   --lp-dot-overlay-opacity: 0.2;
   --lp-grain-opacity: 0.02;
   --lp-scanline: rgba(0, 0, 0, 0.04);
-  --lp-mesh-a: rgba(6, 182, 212, 0.06);
-  --lp-mesh-b: rgba(124, 58, 237, 0.05);
-  --lp-glow: rgba(8, 145, 178, 0.28);
-  --lp-glow-strong: rgba(8, 145, 178, 0.45);
-  --lp-terminal-bg: rgba(255, 255, 255, 0.72);
+  --lp-mesh-a: rgba(37, 99, 235, 0.06);
+  --lp-mesh-b: rgba(37, 99, 235, 0.05);
+  --lp-glow: rgba(29, 78, 216, 0.28);
+  --lp-glow-strong: rgba(29, 78, 216, 0.45);
+  --lp-terminal-bg: var(--lp-demo-bg);
+  --lp-watermark-opacity: 0.1;
 
   /* Vault light — solid surfaces, no wash-through */
   --vault-glass: #f7f7f8;
@@ -103,13 +112,13 @@
   --vault-soft-2: #e0e0e6;
   --vault-track: #a1a1aa;
   --vault-panel: #d0d0d7;
-  --vault-accent-ink: #0e7490;
-  --vault-accent-deep: #0891b2;
+  --vault-accent-ink: #1e40af;
+  --vault-accent-deep: #1d4ed8;
   --vault-danger-ink: #dc2626;
   --vault-warn-ink: #a16207;
   --vault-ok-ink: #15803d;
-  --vault-accent-soft: #c5f3fa;
-  --vault-accent-softer: #e6fbfd;
+  --vault-accent-soft: #dbeafe;
+  --vault-accent-softer: #eff6ff;
   --vault-danger-soft: #fee2e2;
   --vault-warn-soft: #fef0c7;
   --vault-ok-soft: #d8f5e0;
@@ -205,19 +214,19 @@
 }
 
 @utility border-glow {
-  border-color: color-mix(in srgb, #06b6d4 70%, transparent);
+  border-color: color-mix(in srgb, #2563eb 70%, transparent);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, #06b6d4 45%, transparent),
+    0 0 0 1px color-mix(in srgb, #2563eb 45%, transparent),
     0 0 28px var(--lp-glow),
-    inset 0 0 24px rgba(6, 182, 212, 0.06);
+    inset 0 0 24px rgba(37, 99, 235, 0.06);
 }
 
-@utility text-glow-cyan {
-  text-shadow: 0 0 28px rgba(6, 182, 212, 0.55);
+@utility text-glow-blue {
+  text-shadow: 0 0 28px rgba(37, 99, 235, 0.55);
 }
 
-@utility text-glow-acid {
-  text-shadow: 0 0 18px color-mix(in srgb, var(--lp-acid) 55%, transparent);
+@utility text-glow-blue-soft {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--lp-blue-soft) 55%, transparent);
 }
 
 /* ── Reveal (IntersectionObserver) ── */

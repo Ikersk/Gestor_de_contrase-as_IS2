@@ -25,7 +25,7 @@ export function Landing({ onAccess }: LandingProps) {
         aria-hidden="true"
         className="pointer-events-none fixed inset-x-0 bottom-0 z-0 flex justify-center overflow-hidden"
       >
-        <span className="translate-y-[28%] select-none font-display text-[42vw] font-bold leading-none tracking-tighter text-ink opacity-[0.025]">
+        <span className="translate-y-[28%] select-none font-display text-[42vw] font-bold leading-none tracking-tighter text-ink opacity-[var(--lp-watermark-opacity)]">
           ARCA
         </span>
       </div>
@@ -36,21 +36,21 @@ export function Landing({ onAccess }: LandingProps) {
           href="/"
           aria-label="Arca, inicio"
         >
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-cyan-electric font-mono text-[13px] font-bold tracking-normal text-abyss shadow-[0_0_18px_rgba(6,182,212,0.45)] transition-shadow group-hover:shadow-[0_0_28px_rgba(6,182,212,0.7)]">
+          <span className="grid h-8 w-8 place-items-center rounded-md bg-blue-electric font-mono text-[13px] font-bold tracking-normal text-abyss shadow-[0_0_18px_rgba(37,99,235,0.45)] transition-shadow group-hover:shadow-[0_0_28px_rgba(37,99,235,0.7)]">
             A
           </span>
           arca
         </a>
 
         <nav className="flex items-center gap-7 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-dim" aria-label="Navegación principal">
-          <a className="hidden transition hover:text-cyan-electric sm:inline" href="#arquitectura">
+          <a className="hidden transition hover:text-blue-electric sm:inline" href="#arquitectura">
             Arquitectura
           </a>
-          <a className="hidden transition hover:text-cyan-electric sm:inline" href="#stack">
+          <a className="hidden transition hover:text-blue-electric sm:inline" href="#stack">
             Stack
           </a>
           <button
-            className="rounded-full border border-line px-4 py-1.5 text-ink transition hover:border-glow hover:text-cyan-electric"
+            className="rounded-full border border-line px-4 py-1.5 text-ink transition hover:border-glow hover:text-blue-electric"
             type="button"
             onClick={onAccess}
           >
@@ -69,7 +69,7 @@ export function Landing({ onAccess }: LandingProps) {
       <footer className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-3 border-t border-line px-6 py-8 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint sm:flex-row sm:items-center sm:justify-between">
         <span>arca / privacidad primero</span>
         <span className="text-ink-dim">
-          construido para guardar lo importante · <span className="text-cyan-electric">zk</span>
+          construido para guardar lo importante · <span className="text-blue-electric">zk</span>
         </span>
       </footer>
     </div>

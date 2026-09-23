@@ -107,10 +107,10 @@ export function CredentialDetailPanel({
       >
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(6,182,212,0.08),transparent_70%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,99,235,0.08),transparent_70%)]"
         />
         <div className="relative z-10 flex flex-col items-center gap-3">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-line bg-vault-glass text-vault-accent backdrop-blur-md shadow-[0_0_40px_rgba(6,182,212,0.1)]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-line bg-vault-glass text-vault-accent backdrop-blur-md shadow-[0_0_40px_rgba(37,99,235,0.1)]">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -150,7 +150,7 @@ export function CredentialDetailPanel({
         aria-hidden
         className="pointer-events-none sticky top-0 z-0 h-0"
       >
-        <div className="pointer-events-none absolute -inset-x-8 top-0 h-[280px] bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.14),transparent_70%)]" />
+        <div className="pointer-events-none absolute -inset-x-8 top-0 h-[280px] bg-[radial-gradient(ellipse_at_top,rgba(37,99,235,0.14),transparent_70%)]" />
       </div>
 
       <div className="relative z-10 space-y-4 p-4 lg:p-5">
@@ -202,7 +202,7 @@ export function CredentialDetailPanel({
             <button
               type="button"
               onClick={() => onEdit(credential.id)}
-              className="rounded-lg border border-line bg-vault-soft-2 px-3 py-1.5 font-mono text-[15px] uppercase tracking-wider text-ink-dim transition-all hover:border-cyan-500/50 hover:text-vault-accent"
+              className="rounded-lg border border-line bg-vault-soft-2 px-3 py-1.5 font-mono text-[15px] uppercase tracking-wider text-ink-dim transition-all hover:border-blue-500/50 hover:text-vault-accent"
             >
               Editar
             </button>
@@ -227,7 +227,7 @@ export function CredentialDetailPanel({
                   value={credential.username}
                   readOnly
                   aria-label="Nombre de usuario"
-                    className="min-w-0 flex-1 rounded-lg border border-line bg-vault-input px-3 py-2.5 font-mono text-lg text-ink outline-none transition focus:border-cyan-500/50"
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-vault-input px-3 py-2.5 font-mono text-lg text-ink outline-none transition focus:border-blue-500/50"
                 />
                 <CopyButton value={credential.username} label="Copiar" />
               </div>
@@ -239,7 +239,7 @@ export function CredentialDetailPanel({
                 {revealed ? (
                   <div
                     aria-label="Contraseña revelada"
-                    className="min-w-0 flex-1 overflow-hidden rounded-lg border border-cyan-500/50 bg-vault-input px-3 py-2.5 font-mono text-lg text-ink shadow-[0_0_20px_rgba(6,182,212,0.12)] [data-theme=dark]:text-cyan-100"
+                    className="min-w-0 flex-1 overflow-hidden rounded-lg border border-blue-500/50 bg-vault-input px-3 py-2.5 font-mono text-lg text-ink shadow-[0_0_20px_rgba(37,99,235,0.12)] [data-theme=dark]:text-blue-100"
                   >
                     <ScrambleText
                       value={credential.password}
@@ -252,7 +252,7 @@ export function CredentialDetailPanel({
                     value={credential.password}
                     readOnly
                     aria-label="Contraseña"
-                  className="min-w-0 flex-1 rounded-lg border border-line bg-vault-input px-3 py-2.5 font-mono text-lg text-ink outline-none transition focus:border-cyan-500/50"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-vault-input px-3 py-2.5 font-mono text-lg text-ink outline-none transition focus:border-blue-500/50"
                   />
                 )}
                 <button
@@ -263,8 +263,8 @@ export function CredentialDetailPanel({
                   aria-pressed={revealed}
                   className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border transition-all duration-150 ${
                     revealed
-                      ? "border-cyan-500/60 bg-vault-accent-soft text-vault-accent shadow-[0_0_16px_rgba(6,182,212,0.25)]"
-                      : "border-line bg-vault-soft-2 text-ink-dim hover:border-cyan-500/50 hover:text-vault-accent"
+                      ? "border-blue-500/60 bg-vault-accent-soft text-vault-accent shadow-[0_0_16px_rgba(37,99,235,0.25)]"
+                      : "border-line bg-vault-soft-2 text-ink-dim hover:border-blue-500/50 hover:text-vault-accent"
                   }`}
                 >
                   {revealed ? (
@@ -302,7 +302,7 @@ export function CredentialDetailPanel({
                       href={url}
                       target="_blank"
                       rel="noreferrer"
-                      className="block truncate rounded-lg border border-line bg-vault-input px-3 py-2 font-mono text-base text-vault-accent transition-all hover:border-cyan-500/50 hover:bg-vault-accent-softer hover:shadow-[0_0_16px_rgba(6,182,212,0.12)]"
+                      className="block truncate rounded-lg border border-line bg-vault-input px-3 py-2 font-mono text-base text-vault-accent transition-all hover:border-blue-500/50 hover:bg-vault-accent-softer hover:shadow-[0_0_16px_rgba(37,99,235,0.12)]"
                     >
                       {url}
                     </a>

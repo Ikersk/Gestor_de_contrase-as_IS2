@@ -53,16 +53,16 @@ export function CopyButton({
       aria-label={title ?? label}
       className={`group relative inline-flex shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-md border px-2.5 py-1.5 font-mono text-[15px] uppercase tracking-[0.12em] transition-all duration-150 ${
         copied
-          ? "border-cyan-500/60 bg-vault-accent-soft text-vault-accent shadow-[0_0_16px_rgba(6,182,212,0.25)]"
+          ? "border-blue-500/60 bg-vault-accent-soft text-vault-accent shadow-[0_0_16px_rgba(37,99,235,0.25)]"
           : failed
             ? "border-red-500/50 bg-vault-danger-soft text-vault-danger"
-            : "border-line bg-vault-soft-2 text-ink-dim hover:border-cyan-500/50 hover:bg-vault-accent-softer hover:text-vault-accent"
+            : "border-line bg-vault-soft-2 text-ink-dim hover:border-blue-500/50 hover:bg-vault-accent-softer hover:text-vault-accent"
       } ${className}`}
     >
       {copied && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 animate-ping bg-cyan-400/20"
+          className="pointer-events-none absolute inset-0 animate-ping bg-blue-400/20"
         />
       )}
       <span className="relative z-10 flex items-center gap-1.5">

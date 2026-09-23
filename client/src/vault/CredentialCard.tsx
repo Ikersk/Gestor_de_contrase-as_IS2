@@ -46,14 +46,14 @@ export function CredentialCard({
       }}
       className={`group relative flex w-full cursor-pointer items-center gap-3 overflow-hidden rounded-xl border p-3 text-left backdrop-blur-md transition-all duration-200 ${
         selected
-          ? "border-cyan-500/60 bg-vault-accent-soft shadow-[0_0_36px_rgba(6,182,212,0.18)]"
-          : "border-line bg-vault-glass hover:-translate-y-0.5 hover:border-cyan-500/50 hover:bg-vault-accent-softer hover:shadow-[0_0_36px_rgba(6,182,212,0.15)]"
+          ? "border-blue-500/60 bg-vault-accent-soft shadow-[0_0_36px_rgba(37,99,235,0.18)]"
+          : "border-line bg-vault-glass hover:-translate-y-0.5 hover:border-blue-500/50 hover:bg-vault-accent-softer hover:shadow-[0_0_36px_rgba(37,99,235,0.15)]"
       }`}
     >
       {selected && (
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 w-0.5 bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.9)]"
+          className="absolute inset-y-0 left-0 w-0.5 bg-blue-400 shadow-[0_0_10px_rgba(37,99,235,0.9)]"
         />
       )}
 
@@ -85,7 +85,7 @@ export function CredentialCard({
             {credential.title}
           </span>
           {hasTotp && (
-            <span className="rounded border border-cyan-500/50 bg-vault-accent-soft px-1 py-px font-mono text-[13px] uppercase tracking-[0.12em] text-vault-accent">
+            <span className="rounded border border-blue-500/50 bg-vault-accent-soft px-1 py-px font-mono text-[13px] uppercase tracking-[0.12em] text-vault-accent">
               2FA
             </span>
           )}

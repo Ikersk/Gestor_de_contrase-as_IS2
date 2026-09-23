@@ -42,10 +42,10 @@ function CryptoDemo() {
   return (
     <div className="space-y-4">
       <label
-        className="block font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-electric"
+        className="block font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-blue-electric"
         htmlFor="demo-input"
       >
-        Plaintext → AES-256-GCM
+        Texto plano
       </label>
       <input
         id="demo-input"
@@ -55,22 +55,22 @@ function CryptoDemo() {
         onChange={(e) => setInput(e.target.value)}
         autoComplete="off"
         spellCheck={false}
-        className="w-full rounded-lg border border-line bg-black/40 px-3.5 py-3 font-mono text-sm text-ink placeholder:text-ink-faint/70 outline-none transition focus:border-cyan-electric/70 focus:shadow-[0_0_0_3px_rgba(6,182,212,0.18)] [data-theme=light]_&:bg-white/25"
+        className="w-full rounded-lg border border-line bg-[var(--lp-demo-input)] px-3.5 py-3 font-mono text-sm text-ink placeholder:text-ink-faint/70 outline-none transition focus:border-blue-electric/70 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.18)]"
       />
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-lg border border-line bg-abyss/70 p-3">
-          <span className="mb-1.5 block font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-cyan-electric">
+        <div className="rounded-lg border border-line bg-[var(--lp-demo-block)] p-3">
+          <span className="mb-1.5 block font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-blue-electric">
             Ciphertext
           </span>
           <code className="block break-all font-mono text-[11px] leading-relaxed text-ink-dim">
             {cipher ? cipher.ciphertext : "af09c1b3e7…"}
           </code>
         </div>
-        <div className="rounded-lg border border-line bg-abyss/70 p-3">
-          <span className="mb-1.5 block font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-acid">
+        <div className="rounded-lg border border-line bg-[var(--lp-demo-block)] p-3">
+          <span className="mb-1.5 block font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-blue-soft">
             IV · 12 bytes
           </span>
-          <code className="block break-all font-mono text-[11px] leading-relaxed text-acid">
+          <code className="block break-all font-mono text-[11px] leading-relaxed text-blue-soft">
             {cipher ? cipher.iv : "a4f208e19c3b…"}
           </code>
         </div>
@@ -103,18 +103,18 @@ export function CiphertextVault() {
         }}
       />
 
-      <div className="relative overflow-hidden rounded-2xl border border-line-strong bg-surface backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+      <div className="relative overflow-hidden rounded-2xl border border-line-strong bg-[var(--lp-demo-bg)] backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
         {/* Barra superior estilo hardware de seguridad */}
-        <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-3">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+        <div className="flex items-center gap-2 border-b border-line bg-[var(--lp-demo-header)] px-4 py-3">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#1d4ed8]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#3b82f6]" />
           <span className="ml-2 font-mono text-[10px] tracking-wider text-ink-faint">
-            arca://vault-core
+            arca://boveda
           </span>
-          <span className="ml-auto flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-acid">
-            <span className="animate-pulse-glow h-1.5 w-1.5 rounded-full bg-acid" />
-            sealed
+          <span className="ml-auto flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-blue-soft">
+            <span className="animate-pulse-glow h-1.5 w-1.5 rounded-full bg-blue-soft" />
+            Seguridad
           </span>
         </div>
 
@@ -131,7 +131,7 @@ export function CiphertextVault() {
             }}
           />
           <div className="relative flex items-center gap-5">
-            <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-xl border border-cyan-electric/40 bg-cyan-electric/10 shadow-[0_0_24px_rgba(6,182,212,0.25)]">
+            <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-xl border border-blue-electric/40 bg-blue-electric/10 shadow-[0_0_24px_rgba(37,99,235,0.25)]">
               <svg
                 width="28"
                 height="28"
@@ -141,7 +141,7 @@ export function CiphertextVault() {
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="text-cyan-electric"
+                className="text-blue-electric"
                 aria-hidden="true"
               >
                 <rect x="3" y="11" width="18" height="11" rx="2" />
@@ -151,12 +151,12 @@ export function CiphertextVault() {
             </div>
             <div className="min-w-0">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
-                digital safe · split-key
+                demo de cifrado en vivo
               </p>
               <p className="mt-1 font-mono text-sm leading-relaxed text-ink-dim">
-                <span className="text-cyan-electric">c7f3</span>
+                <span className="text-blue-electric">c7f3</span>
                 <span className="text-ink-faint">a91e0b</span>
-                <span className="text-acid">4d2c</span>
+                <span className="text-blue-soft">4d2c</span>
                 <span className="text-ink-faint">ee19…</span>
                 <br />
                 <span className="text-ink-faint">bloque ilegible · solo tu RAM lo abre</span>

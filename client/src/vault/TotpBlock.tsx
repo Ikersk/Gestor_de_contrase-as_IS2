@@ -62,7 +62,7 @@ export function TotpBlock({ secret }: TotpBlockProps) {
       className={`relative overflow-hidden rounded-xl border backdrop-blur-md transition-colors duration-200 ${
         critical
           ? "border-amber-500/60 bg-vault-warn-soft shadow-[0_0_24px_rgba(245,158,11,0.2)]"
-          : "border-cyan-500/40 bg-vault-glass shadow-[0_0_24px_rgba(6,182,212,0.08)]"
+          : "border-blue-500/40 bg-vault-glass shadow-[0_0_24px_rgba(37,99,235,0.08)]"
       }`}
       aria-label="Código de autenticación de dos factores"
     >
@@ -106,7 +106,7 @@ export function TotpBlock({ secret }: TotpBlockProps) {
       >
         <span
           className={`absolute inset-y-0 left-0 origin-left transition-transform duration-200 ease-linear ${
-            critical ? "bg-amber-500 [data-theme=dark]:bg-amber-400" : "bg-cyan-600 [data-theme=dark]:bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]"
+            critical ? "bg-amber-500 [data-theme=dark]:bg-amber-400" : "bg-blue-600 [data-theme=dark]:bg-blue-400 shadow-[0_0_8px_rgba(37,99,235,0.8)]"
           }`}
           style={{ width: "100%", transform: `scaleX(${snapshot.progress})` }}
         />

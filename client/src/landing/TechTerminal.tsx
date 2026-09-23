@@ -24,9 +24,9 @@ const stackLines: TermLine[] = [
 const KIND_CLASS: Record<TermLine["kind"], string> = {
   cmd: "text-ink font-bold",
   ok: "text-ink-dim",
-  accent: "text-cyan-electric",
-  dim: "text-acid",
-  prompt: "text-cyan-electric",
+  accent: "text-blue-electric",
+  dim: "text-blue-soft",
+  prompt: "text-blue-electric",
 };
 
 export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
@@ -52,9 +52,9 @@ export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
             />
 
             <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-3 backdrop-blur-md">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#1d4ed8]" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#3b82f6]" />
               <span className="ml-3 font-mono text-[10px] tracking-wider text-ink-faint">
                 arca@zk: ~/stack — zsh
               </span>
@@ -81,10 +81,10 @@ export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
                   </span>
                 ))}
                 <span
-                  className="lp-term-line text-cyan-electric"
+                  className="lp-term-line text-blue-electric"
                   style={{ ["--i" as string]: stackLines.length, ["--chars" as string]: 2 }}
                 >
-                  $ <span className="animate-blink ml-0.5 inline-block h-[1em] w-[0.55em] translate-y-[0.12em] bg-cyan-electric" />
+                  $ <span className="animate-blink ml-0.5 inline-block h-[1em] w-[0.55em] translate-y-[0.12em] bg-blue-electric" />
                 </span>
               </div>
             </div>
@@ -93,7 +93,7 @@ export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
 
         {/* CTA final */}
         <div className="lp-reveal" style={{ transitionDelay: "200ms" }}>
-          <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-cyan-electric">
+          <p className="mb-3 font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-blue-electric">
             Social proof · stack verificable
           </p>
           <h2
@@ -102,7 +102,7 @@ export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
           >
             Sin magia.
             <br />
-            <span className="text-cyan-electric">Solo matemática</span> que
+            <span className="text-blue-electric">Solo matemática</span> que
             <br />
             puedes auditar.
           </h2>
@@ -125,7 +125,7 @@ export function TechTerminal({ onAccess, reveal }: TechTerminalProps) {
               "CSP estricta · CORS restringido",
             ].map((item) => (
               <li key={item} className="flex items-start gap-2.5">
-                <span className="mt-[3px] text-acid" aria-hidden="true">
+                <span className="mt-[3px] text-blue-soft" aria-hidden="true">
                   ▸
                 </span>
                 {item}

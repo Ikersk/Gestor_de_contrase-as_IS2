@@ -68,7 +68,7 @@ function MetricStrip({
           type="button"
           onClick={onCheckBreach}
           disabled={isCheckingBreach || credentials.length === 0}
-          className="rounded border border-line bg-vault-soft-2 px-2 py-1 font-mono text-[14px] uppercase tracking-[0.12em] text-ink-dim transition-colors hover:border-cyan-500/50 hover:text-vault-accent disabled:opacity-40"
+          className="rounded border border-line bg-vault-soft-2 px-2 py-1 font-mono text-[14px] uppercase tracking-[0.12em] text-ink-dim transition-colors hover:border-blue-500/50 hover:text-vault-accent disabled:opacity-40"
         >
           {isCheckingBreach ? "SCAN..." : "ESCANEAR BRECHAS"}
         </button>
@@ -77,7 +77,7 @@ function MetricStrip({
         {metrics.map((m) => (
           <div
             key={m.key}
-            className="rounded-lg border border-line bg-vault-glass px-2.5 py-2 backdrop-blur-sm transition-colors hover:border-cyan-500/40"
+            className="rounded-lg border border-line bg-vault-glass px-2.5 py-2 backdrop-blur-sm transition-colors hover:border-blue-500/40"
           >
             <p className="font-mono text-[13px] uppercase tracking-[0.18em] text-ink-faint">
               {m.label}
@@ -88,7 +88,7 @@ function MetricStrip({
             {typeof m.bar === "number" && (
               <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-vault-track">
                 <span
-                  className="block h-full origin-left bg-cyan-600 [data-theme=dark]:bg-cyan-400 transition-transform duration-500"
+                  className="block h-full origin-left bg-blue-600 [data-theme=dark]:bg-blue-400 transition-transform duration-500"
                   style={{ transform: `scaleX(${m.bar})`, width: "100%" }}
                 />
               </div>
@@ -193,13 +193,13 @@ export function CredentialList({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar accesos..."
             aria-label="Buscar credenciales"
-            className="w-full rounded-lg border border-line bg-vault-input py-2 pl-9 pr-3 font-mono text-base text-ink placeholder:text-ink-faint outline-none transition focus:border-cyan-500/60 focus:shadow-[0_0_0_3px_rgba(6,182,212,0.15)] disabled:opacity-40"
+            className="w-full rounded-lg border border-line bg-vault-input py-2 pl-9 pr-3 font-mono text-base text-ink placeholder:text-ink-faint outline-none transition focus:border-blue-500/60 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)] disabled:opacity-40"
           />
         </div>
         <button
           type="button"
           onClick={onAddNew}
-          className="shrink-0 rounded-lg border border-cyan-500/50 bg-vault-accent-soft px-3 py-2 font-mono text-[15px] uppercase tracking-[0.1em] text-vault-accent transition-all duration-150 hover:border-cyan-400 hover:bg-cyan-500/30 hover:shadow-[0_0_18px_rgba(6,182,212,0.3)]"
+          className="shrink-0 rounded-lg border border-blue-500/50 bg-vault-accent-soft px-3 py-2 font-mono text-[15px] uppercase tracking-[0.1em] text-vault-accent transition-all duration-150 hover:border-blue-400 hover:bg-blue-500/30 hover:shadow-[0_0_18px_rgba(37,99,235,0.3)]"
         >
           + Nuevo
         </button>
@@ -220,7 +220,7 @@ export function CredentialList({
               <button
                 type="button"
                 onClick={onAddNew}
-                className="mt-1 rounded-lg border border-cyan-500/50 bg-vault-accent-soft px-3 py-1.5 font-mono text-[15px] uppercase tracking-wider text-vault-accent hover:bg-cyan-500/30"
+                className="mt-1 rounded-lg border border-blue-500/50 bg-vault-accent-soft px-3 py-1.5 font-mono text-[15px] uppercase tracking-wider text-vault-accent hover:bg-blue-500/30"
               >
                 + Nuevo acceso
               </button>

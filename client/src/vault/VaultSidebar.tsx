@@ -97,14 +97,14 @@ export function VaultSidebar({
               aria-current={active ? "page" : undefined}
               className={`group flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 ${
                 active
-                  ? "border-cyan-500/50 bg-vault-accent-soft text-vault-accent shadow-[0_0_20px_rgba(6,182,212,0.12)]"
-                  : "border-transparent text-ink-dim hover:border-cyan-500/40 hover:bg-vault-accent-softer hover:text-ink"
+                  ? "border-blue-500/50 bg-vault-accent-soft text-vault-accent shadow-[0_0_20px_rgba(37,99,235,0.12)]"
+                  : "border-transparent text-ink-dim hover:border-blue-500/40 hover:bg-vault-accent-softer hover:text-ink"
               }`}
             >
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors ${
                   active
-                    ? "border-cyan-500/40 bg-vault-accent-softer text-vault-accent"
+                    ? "border-blue-500/40 bg-vault-accent-softer text-vault-accent"
                     : "border-line bg-vault-soft-2 text-ink-faint group-hover:text-vault-accent"
                 }`}
               >
@@ -132,7 +132,7 @@ export function VaultSidebar({
         <button
           type="button"
           onClick={onOpenAccount}
-          className="flex w-full items-center gap-2.5 rounded-lg border border-line bg-vault-soft-2 px-3 py-2.5 text-left text-lg text-ink-dim transition-all duration-150 hover:border-cyan-500/50 hover:bg-vault-accent-softer hover:text-ink"
+          className="flex w-full items-center gap-2.5 rounded-lg border border-line bg-vault-soft-2 px-3 py-2.5 text-left text-lg text-ink-dim transition-all duration-150 hover:border-blue-500/50 hover:bg-vault-accent-softer hover:text-ink"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
