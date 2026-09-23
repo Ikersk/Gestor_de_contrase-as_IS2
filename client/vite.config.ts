@@ -4,6 +4,7 @@ import path from 'node:path';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 function sriPlugin(): Plugin {
   return {
@@ -41,7 +42,7 @@ function sriPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), sriPlugin()],
+  plugins: [react(), tailwindcss(), sriPlugin()],
   server: {
     proxy: {
       '/api': 'http://localhost:3000',

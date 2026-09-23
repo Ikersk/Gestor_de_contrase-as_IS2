@@ -11,6 +11,7 @@ export interface Credential {
   password: string;
   urls: string[];
   totpSecret?: string;
+  favorite?: boolean;
 }
 
 export interface DecryptedCredential extends Credential {
@@ -25,6 +26,7 @@ function normalizeCredential(value: Credential & { url?: string }): Credential {
     username: value.username,
     password: value.password,
     urls: Array.isArray(value.urls) ? value.urls : value.url ? [value.url] : [],
+    favorite: Boolean(value.favorite),
     ...(totpSecret ? { totpSecret } : {}),
   };
 }
