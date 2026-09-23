@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import type { DecryptedCredential } from "./vault";
 import { getTotpSnapshot } from "./totp";
 import { auditVault } from "./vault-health";
+import { analyzeUrl, type UrlSecurityReport } from "./anti-phishing";
 
 interface CredentialDetailProps {
   credential: DecryptedCredential | null;
@@ -159,6 +160,14 @@ export function CredentialDetail({
 }: CredentialDetailProps) {
   const [revealedPassword, setRevealedPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [phishingModalReport, setPhishingModalReport] = useState<UrlSecurityReport | null>(null);
+
+  function handleUrlClick(e: React.MouseEvent, report: UrlSecurityReport) {
+    if (!report.canDirectOpen) {
+      e.preventDefault();
+      setPhishingModalReport(report);
+    }
+  }
 
   if (!credential) {
     return (
@@ -305,19 +314,37 @@ export function CredentialDetail({
 
           {credential.urls.filter(u => u.length > 0).length > 0 && (
             <div className="detail-field">
-              <label className="detail-label">URLs</label>
+              <label className="detail-label">URLs y Escudo Anti-Phishing</label>
               <div className="detail-urls">
-                {credential.urls.filter(u => u.length > 0).map((url, index) => (
-                  <a
-                    key={index}
-                    className="detail-url"
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {url}
-                  </a>
-                ))}
+                {credential.urls.filter(u => u.length > 0).map((url, index) => {
+                  const report = analyzeUrl(url);
+                  return (
+                    <div key={index} className={`detail-url-card detail-url-card--${report.riskLevel}`}>
+                      <div className="detail-url-top">
+                        <a
+                          className="detail-url"
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => handleUrlClick(e, report)}
+                          title={report.canDirectOpen ? "Abrir sitio web seguro" : "Bloqueado por Escudo Anti-Phishing - Requiere confirmación"}
+                        >
+                          {url}
+                        </a>
+                        <span className={`phishing-badge phishing-badge--${report.riskLevel}`}>
+                          {report.riskLevel === 'safe' && (report.isOfficialVerified ? '🛡️ Oficial Verificado' : '🔒 HTTPS Válido')}
+                          {report.riskLevel === 'warning' && '⚠️ HTTP Inseguro'}
+                          {report.riskLevel === 'danger' && '🚨 Posible Phishing'}
+                        </span>
+                      </div>
+                      {report.riskLevel !== 'safe' && (
+                        <div className="detail-url-risk-caption">
+                          {report.threatTitle}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -328,6 +355,66 @@ export function CredentialDetail({
           <AuditDetail credential={credential} isBreached={isBreached} />
         </div>
       </div>
+
+      {phishingModalReport && (
+        <div className="phishing-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="phishing-title">
+          <div className="phishing-modal-card">
+            <div className="phishing-modal-header">
+              <span className="phishing-modal-icon">🚨</span>
+              <div>
+                <h3 id="phishing-title" className="phishing-modal-title">{phishingModalReport.threatTitle}</h3>
+                <span className="phishing-modal-subtitle">Escudo de Protección Anti-Phishing de Arca</span>
+              </div>
+            </div>
+            <div className="phishing-modal-body">
+              <p className="phishing-modal-desc">{phishingModalReport.threatDescription}</p>
+              
+              <div className="phishing-modal-info-box">
+                <div className="phishing-info-row">
+                  <span className="phishing-info-label">URL Analizada:</span>
+                  <code className="phishing-info-code">{phishingModalReport.url}</code>
+                </div>
+                {phishingModalReport.isTyposquatting && phishingModalReport.typosquatTarget && (
+                  <div className="phishing-info-row phishing-info-row--alert">
+                    <span className="phishing-info-label">Servicio Legítimo Imitado:</span>
+                    <strong className="phishing-target-highlight">{phishingModalReport.typosquatTarget}</strong>
+                  </div>
+                )}
+                {phishingModalReport.homoglyphDetails && (
+                  <div className="phishing-info-row">
+                    <span className="phishing-info-label">Detalles Criptográficos:</span>
+                    <span>{phishingModalReport.homoglyphDetails}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="phishing-modal-warning-bar">
+                ⚠️ <strong>Aviso Crítico:</strong> Los atacantes utilizan estos dominios clonados para robar tus credenciales. Te recomendamos <strong>no ingresar tus datos personales</strong> en este enlace.
+              </div>
+            </div>
+            <div className="phishing-modal-footer">
+              <button
+                type="button"
+                className="phishing-btn-safe"
+                onClick={() => setPhishingModalReport(null)}
+              >
+                🛡️ Regresar a salvo (Recomendado)
+              </button>
+              <button
+                type="button"
+                className="phishing-btn-danger"
+                onClick={() => {
+                  window.open(phishingModalReport.url, '_blank', 'noopener,noreferrer');
+                  setPhishingModalReport(null);
+                }}
+              >
+                Entiendo el riesgo y deseo continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

@@ -16,6 +16,7 @@ import {
 } from "./vault";
 import "./styles.css";
 import { FIELD_LIMITS } from "./validation";
+import { analyzeUrl } from "./anti-phishing";
 import {
   DEFAULT_PASSWORD_CHARACTER_SELECTION,
   generateSecurePassword,
@@ -1174,12 +1175,45 @@ function App() {
       }));
     }
   }
+  function clearOrRemoveCredentialUrl(index: number) {
+    if (credential.urls.length > 1) {
+      removeCredentialUrl(index);
+    } else {
+      updateCredentialUrl(index, "");
+    }
+  }
+  function fixCredentialUrlWithTarget(index: number, targetDomain: string) {
+    const currentUrl = credential.urls[index] || "";
+    try {
+      const parsed = new URL(currentUrl.startsWith("http") ? currentUrl : `https://${currentUrl}`);
+      parsed.hostname = targetDomain;
+      parsed.protocol = "https:";
+      updateCredentialUrl(index, parsed.toString());
+    } catch {
+      updateCredentialUrl(index, `https://${targetDomain}`);
+    }
+  }
   /** Crea o actualiza una credencial; el módulo vault cifra antes de llamar a la API. */
   async function handleCredentialSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
+
+    for (const url of credential.urls) {
+      if (url && url.trim().length > 3) {
+        const report = analyzeUrl(url.trim());
+        if (report.riskLevel === "danger") {
+          setError(
+            `Bloqueado por Escudo Anti-Phishing: La dirección "${report.hostname}" ha sido detectada como suplantación (${report.threatTitle}). El sistema prohíbe almacenar accesos a páginas fraudulentas. Debes corregir la dirección o eliminarla para poder guardar.`
+          );
+          setBusy(false);
+          return;
+        }
+      }
+    }
+
     try {
+
       if (editingId === null) {
         const created = await createCredential(credential);
         setCredentials((current) => [...current, created]);
@@ -1504,38 +1538,159 @@ function App() {
                 setCredential({ ...credential, totpSecret: event.target.value })
               }
             />
-            <fieldset className="url-fields">
-              <legend>URLs <span>Opcional</span></legend>
-              {credential.urls.map((url, index) => (
-                <div className="url-row" key={`credential-url-${index}`}>
-                  <input
-                    id={`credential-url-${index}`}
-                    maxLength={FIELD_LIMITS.url}
-                    type="url"
-                    autoComplete="off"
-                    placeholder="https://"
-                    value={url}
-                    onChange={(event) => updateCredentialUrl(index, event.target.value)}
-                  />
-                  <button className="secondary-button" type="button" onClick={() => removeCredentialUrl(index)} disabled={credential.urls.length === 1}>
-                    Quitar
-                  </button>
-                </div>
-              ))}
-              {credential.urls.length < FIELD_LIMITS.maxUrls && (
-                <button className="secondary-button add-url-button" type="button" onClick={addCredentialUrl}>
-                  Añadir URL
-                </button>
-              )}
-            </fieldset>
-            <div className="form-actions">
-              <button className="primary-button" type="submit" disabled={busy}>
-                {editingId === null ? "Guardar acceso" : "Guardar cambios"}
-              </button>
-              <button className="secondary-button" type="button" onClick={closeCredentialModal}>
-                Cancelar
-              </button>
-            </div>
+            {(() => {
+              const hasDangerousUrls = credential.urls.some((u) => {
+                if (!u || u.trim().length <= 3) return false;
+                return analyzeUrl(u.trim()).riskLevel === "danger";
+              });
+              return (
+                <>
+                  <fieldset className="url-fields">
+                    <legend>URLs <span>Opcional</span></legend>
+                    {credential.urls.map((url, index) => {
+                      const report = url && url.trim().length > 3 ? analyzeUrl(url.trim()) : null;
+                      return (
+                        <div key={`credential-url-${index}`} className="credential-url-item">
+                          <div className="url-row">
+                            <div className="url-input-wrapper">
+                              <input
+                                id={`credential-url-${index}`}
+                                maxLength={FIELD_LIMITS.url}
+                                type="url"
+                                autoComplete="off"
+                                placeholder="https://"
+                                value={url}
+                                onChange={(event) => updateCredentialUrl(index, event.target.value)}
+                                className={
+                                  report?.riskLevel === "danger"
+                                    ? "input-phishing-danger"
+                                    : report?.riskLevel === "warning"
+                                    ? "input-phishing-warning"
+                                    : report?.riskLevel === "safe"
+                                    ? "input-phishing-safe"
+                                    : ""
+                                }
+                              />
+                              {report && (
+                                <span className={`url-status-icon ${report.riskLevel}`} title={report.threatTitle}>
+                                  {report.riskLevel === "danger" ? (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                  ) : report.riskLevel === "warning" ? (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                  ) : (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => clearOrRemoveCredentialUrl(index)}
+                              title="Limpiar o quitar enlace"
+                            >
+                              {credential.urls.length > 1 ? "Quitar" : "Limpiar"}
+                            </button>
+                          </div>
+
+                          {/* Alerta minimalista de remediación */}
+                          {report && report.riskLevel === "danger" && (
+                            <div className="url-minimal-alert" role="alert">
+                              <div className="url-minimal-header">
+                                <span className="url-minimal-icon">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#991b1b" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                </span>
+                                <div className="url-minimal-titles">
+                                  <strong className="url-minimal-title">
+                                    {report.typosquatTarget
+                                      ? `Posible imitación de ${report.typosquatTarget}`
+                                      : report.threatTitle}
+                                  </strong>
+                                  <p className="url-minimal-desc">
+                                    {report.threatDescription || "Esta dirección parece fraudulenta o está incompleta. Por seguridad, no permitimos guardar sitios maliciosos."}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="url-minimal-actions">
+                                {report.typosquatTarget && (
+                                  <button
+                                    type="button"
+                                    className="btn-minimal-fix"
+                                    onClick={() => fixCredentialUrlWithTarget(index, report.typosquatTarget!)}
+                                  >
+                                    Cambiar a https://{report.typosquatTarget}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn-minimal-remove"
+                                  onClick={() => clearOrRemoveCredentialUrl(index)}
+                                >
+                                  Eliminar enlace
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {report && report.riskLevel === "warning" && (
+                            <div className="url-feedback-warning">
+                              <span>Enlace HTTP sin cifrar: Vulnerable a intercepción de red.</span>
+                              <button
+                                type="button"
+                                className="remediation-btn-upgrade-https"
+                                onClick={() => {
+                                  if (url.startsWith("http://")) {
+                                    updateCredentialUrl(index, url.replace(/^http:\/\//, "https://"));
+                                  }
+                                }}
+                              >
+                                Cambiar a HTTPS
+                              </button>
+                            </div>
+                          )}
+
+                          {report && report.riskLevel === "safe" && (
+                            <div className="url-feedback-safe">
+                              {report.isOfficialVerified ? (
+                                <span><strong>Servicio oficial verificado ({report.hostname}):</strong> Cifrado TLS activo y aprobado por catálogo.</span>
+                              ) : (
+                                <span><strong>Conexión HTTPS válida:</strong> Formato FQDN correcto con cifrado TLS activo (Dominio personalizado).</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {credential.urls.length < FIELD_LIMITS.maxUrls && (
+                      <button className="secondary-button add-url-button" type="button" onClick={addCredentialUrl}>
+                        Añadir URL
+                      </button>
+                    )}
+                  </fieldset>
+
+                  {error && (
+                    <div className="modal-error-alert" role="alert">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="form-actions">
+                    <button
+                      className={`primary-button ${hasDangerousUrls ? "btn-danger-blocked" : ""}`}
+                      type="submit"
+                      disabled={busy || hasDangerousUrls}
+                    >
+                      {hasDangerousUrls
+                        ? "Bloqueado: Corrige o elimina la URL fraudulenta"
+                        : (editingId === null ? "Guardar acceso" : "Guardar cambios")}
+                    </button>
+                    <button className="secondary-button" type="button" onClick={closeCredentialModal}>
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </form>
         </dialog>
       {message && (

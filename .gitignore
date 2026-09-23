@@ -19,3 +19,10 @@ client/.vite/
 
 # Documentacion local (no publicar en GitHub)
 DOCS.md
+
+# Base de datos SQLite local en desarrollo
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
+server/data/*.sqlite*
+

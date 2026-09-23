@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "mikestead.dotenv",
+    "vitest.explorer",
+    "ckolkman.vscode-postgres",
+    "formulahendry.auto-rename-tag"
+  ]
+}
