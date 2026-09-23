@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 
-export type VaultFilter = "all" | "favorites" | "notes" | "cards";
+export type VaultFilter = "all" | "favorites";
 
 interface VaultSidebarProps {
   filter: VaultFilter;
@@ -22,7 +22,7 @@ const NAV: Array<{
   {
     id: "all",
     label: "Todos",
-    mono: "ALL",
+    mono: "",
     live: true,
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -36,37 +36,11 @@ const NAV: Array<{
   {
     id: "favorites",
     label: "Favoritos",
-    mono: "FAV",
+    mono: "",
     live: true,
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-      </svg>
-    ),
-  },
-  {
-    id: "notes",
-    label: "Notas Seguras",
-    mono: "NOTE",
-    live: false,
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <rect x="8" y="14" width="8" height="6" rx="1" />
-        <path d="M10 14v-1a2 2 0 1 1 4 0v1" />
-      </svg>
-    ),
-  },
-  {
-    id: "cards",
-    label: "Tarjetas",
-    mono: "CARD",
-    live: false,
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="5" width="20" height="14" rx="2" />
-        <line x1="2" y1="10" x2="22" y2="10" />
       </svg>
     ),
   },
@@ -107,7 +81,7 @@ export function VaultSidebar({
     >
       <div className="border-b border-line/60 px-4 py-3">
         <p className="font-mono text-[14px] uppercase tracking-[0.28em] text-ink-faint">
-          // navigation
+          // MENU
         </p>
       </div>
 
@@ -165,18 +139,17 @@ export function VaultSidebar({
             <circle cx="12" cy="7" r="4" />
           </svg>
           <span className="flex-1">Mi Cuenta</span>
-          <span className="font-mono text-[14px] text-ink-faint">CFG</span>
         </button>
 
         <button
           type="button"
           onClick={handleKillSwitch}
           disabled={busy || purging}
-          className="group relative flex w-full items-center gap-2.5 overflow-hidden rounded-lg border border-fuchsia-500/50 bg-vault-fuchsia-soft px-3 py-3 text-left transition-all duration-150 hover:border-fuchsia-400/70 hover:bg-vault-fuchsia-soft hover:shadow-[0_0_24px_rgba(217,70,239,0.25)] disabled:opacity-60"
+          className="group relative flex w-full items-center gap-2.5 overflow-hidden rounded-lg border border-red-500/50 bg-vault-danger-soft px-3 py-3 text-left transition-all duration-150 hover:border-red-500/70 disabled:opacity-60"
         >
           <span
             aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(217,70,239,0.12)_50%,transparent_100%)] opacity-0 transition-opacity group-hover:opacity-100"
+            className="absolute inset-0 bg-[linear-gradient(135deg,transparent_0%,rgba(239,68,68,0.12)_50%,transparent_100%)] opacity-0 transition-opacity group-hover:opacity-100"
           />
           <svg
             width="15"
@@ -187,23 +160,23 @@ export function VaultSidebar({
             strokeWidth="1.75"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="relative text-vault-fuchsia group-hover:text-fuchsia-700 [data-theme=dark]:group-hover:text-fuchsia-300"
+            className="relative text-vault-danger group-hover:text-red-700 [data-theme=dark]:group-hover:text-red-300"
           >
             <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
             <line x1="12" y1="2" x2="12" y2="12" />
           </svg>
           <span className="relative flex min-w-0 flex-1 flex-col">
-            <span className="text-lg font-medium text-vault-fuchsia">
-              {purging ? "Purgando..." : "Kill Switch"}
+            <span className="text-lg font-medium text-vault-danger">
+              {purging ? "Purgando..." : "CERRAR SESIÓN"}
             </span>
-            <span className="font-mono text-[14px] uppercase tracking-[0.16em] text-vault-fuchsia/85">
-              {purging ? "WIPE_RAM" : "END_SESSION"}
+            <span className="font-mono text-[14px] uppercase tracking-[0.16em] text-vault-danger/85">
+              {purging ? "WIPE_RAM" : ""}
             </span>
           </span>
           <span
             aria-hidden
             className={`relative h-2 w-2 rounded-full ${
-              purging ? "bg-fuchsia-400 animate-pulse" : "bg-fuchsia-500/70"
+              purging ? "bg-red-500 animate-pulse" : "bg-red-500/70"
             }`}
           />
         </button>

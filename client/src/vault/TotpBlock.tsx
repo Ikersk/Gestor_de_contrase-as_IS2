@@ -40,7 +40,7 @@ export function TotpBlock({ secret }: TotpBlockProps) {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-fuchsia-500/50 bg-vault-fuchsia-soft p-4 font-mono text-base text-vault-fuchsia">
+      <div className="rounded-xl border border-red-500/50 bg-vault-danger-soft p-4 font-mono text-base text-vault-danger">
         {error}
       </div>
     );
@@ -61,7 +61,7 @@ export function TotpBlock({ secret }: TotpBlockProps) {
     <div
       className={`relative overflow-hidden rounded-xl border backdrop-blur-md transition-colors duration-200 ${
         critical
-          ? "border-fuchsia-500/60 bg-vault-fuchsia-soft shadow-[0_0_24px_rgba(217,70,239,0.2)]"
+          ? "border-amber-500/60 bg-vault-warn-soft shadow-[0_0_24px_rgba(245,158,11,0.2)]"
           : "border-cyan-500/40 bg-vault-glass shadow-[0_0_24px_rgba(6,182,212,0.08)]"
       }`}
       aria-label="Código de autenticación de dos factores"
@@ -72,7 +72,7 @@ export function TotpBlock({ secret }: TotpBlockProps) {
       />
       <div className="relative flex items-center justify-between gap-3 border-b border-line/60 px-4 py-2.5">
         <div className="flex items-center gap-2 font-mono text-[15px] uppercase tracking-[0.18em] text-ink-dim">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={critical ? "text-vault-fuchsia" : "text-vault-accent"}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={critical ? "text-vault-warn" : "text-vault-accent"}>
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
@@ -80,7 +80,7 @@ export function TotpBlock({ secret }: TotpBlockProps) {
         </div>
         <span
           className={`font-mono text-[15px] tabular-nums tracking-wider ${
-            critical ? "text-vault-fuchsia animate-pulse" : "text-vault-accent"
+            critical ? "text-vault-warn animate-pulse" : "text-vault-accent"
           }`}
         >
           {snapshot.remainingSeconds}s
@@ -106,7 +106,7 @@ export function TotpBlock({ secret }: TotpBlockProps) {
       >
         <span
           className={`absolute inset-y-0 left-0 origin-left transition-transform duration-200 ease-linear ${
-            critical ? "bg-fuchsia-400" : "bg-cyan-600 [data-theme=dark]:bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]"
+            critical ? "bg-amber-500 [data-theme=dark]:bg-amber-400" : "bg-cyan-600 [data-theme=dark]:bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]"
           }`}
           style={{ width: "100%", transform: `scaleX(${snapshot.progress})` }}
         />

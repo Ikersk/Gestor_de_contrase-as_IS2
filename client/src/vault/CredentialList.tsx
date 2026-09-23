@@ -35,7 +35,7 @@ function MetricStrip({
     },
     {
       key: "total",
-      label: "ITEMS",
+      label: "CREDENCIALES",
       value: String(credentials.length).padStart(2, "0"),
       accent: "text-vault-accent",
       bar: null,
@@ -46,11 +46,11 @@ function MetricStrip({
       value: String(totalAlerts).padStart(2, "0"),
       accent: totalAlerts > 0 ? "text-vault-warn" : "text-ink-dim",
       bar: null,
-      detail: totalAlerts > 0 ? `${weakCount}D · ${reusedCount}R` : null,
+      detail: totalAlerts > 0 ? `${weakCount} Debiles · ${reusedCount} Reutilizadas` : null,
     },
     {
       key: "breach",
-      label: "HIBP",
+      label: "BRECHAS",
       value: String(breachedCount).padStart(2, "0"),
       accent: breachedCount > 0 ? "text-vault-danger" : "text-ink-dim",
       bar: null,
@@ -62,7 +62,7 @@ function MetricStrip({
     <div className="border-b border-line/60 px-4 py-3">
       <div className="flex items-center justify-between gap-2 mb-2">
         <p className="font-mono text-[14px] uppercase tracking-[0.28em] text-ink-faint">
-          // vault_status
+          // estado de la boveda
         </p>
         <button
           type="button"
@@ -70,7 +70,7 @@ function MetricStrip({
           disabled={isCheckingBreach || credentials.length === 0}
           className="rounded border border-line bg-vault-soft-2 px-2 py-1 font-mono text-[14px] uppercase tracking-[0.12em] text-ink-dim transition-colors hover:border-cyan-500/50 hover:text-vault-accent disabled:opacity-40"
         >
-          {isCheckingBreach ? "SCAN..." : "SCAN HIBP"}
+          {isCheckingBreach ? "SCAN..." : "ESCANEAR BRECHAS"}
         </button>
       </div>
       <div className="grid grid-cols-4 gap-2">
@@ -102,7 +102,7 @@ function MetricStrip({
         ))}
       </div>
       {breachError && (
-        <p className="mt-2 font-mono text-[15px] text-vault-fuchsia" role="alert">
+        <p className="mt-2 font-mono text-[15px] text-vault-danger" role="alert">
           {breachError}
         </p>
       )}
@@ -157,8 +157,6 @@ export function CredentialList({
     return items;
   }, [credentials, filter, query]);
 
-  const isModuleFilter = filter === "notes" || filter === "cards";
-
   return (
     <section
       className="flex h-full min-h-0 flex-col border-b border-line bg-vault-panel lg:border-b-0 lg:border-r"
@@ -195,7 +193,6 @@ export function CredentialList({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar accesos..."
             aria-label="Buscar credenciales"
-            disabled={isModuleFilter}
             className="w-full rounded-lg border border-line bg-vault-input py-2 pl-9 pr-3 font-mono text-base text-ink placeholder:text-ink-faint outline-none transition focus:border-cyan-500/60 focus:shadow-[0_0_0_3px_rgba(6,182,212,0.15)] disabled:opacity-40"
           />
         </div>
@@ -209,24 +206,7 @@ export function CredentialList({
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-        {isModuleFilter ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-vault-glass p-6 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-line bg-vault-soft-2 text-ink-faint">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </div>
-            <p className="font-mono text-[15px] uppercase tracking-[0.18em] text-vault-accent">
-              MODULE_LOCKED
-            </p>
-            <p className="max-w-[22ch] text-lg text-ink-dim">
-              {filter === "notes"
-                ? "Notas Seguras: módulo cifrado — próximamente."
-                : "Tarjetas: módulo cifrado — próximamente."}
-            </p>
-          </div>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-vault-glass p-6 text-center">
             <span className="font-mono text-4xl text-vault-accent">+</span>
             <p className="max-w-[28ch] text-lg text-ink-dim">

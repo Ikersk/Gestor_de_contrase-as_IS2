@@ -16,7 +16,7 @@ export function strengthLevel(password: string, breached = false): StrengthLevel
 
 const LEVEL_COLORS: Record<StrengthLevel, string> = {
   0: "bg-vault-track",
-  1: "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.7)]",
+  1: "bg-red-500 [data-theme=dark]:bg-red-400",
   2: "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)] [data-theme=dark]:bg-amber-400",
   3: "bg-cyan-600 shadow-[0_0_6px_rgba(6,182,212,0.7)] [data-theme=dark]:bg-cyan-400",
   4: "bg-lime-600 shadow-[0_0_6px_rgba(101,163,13,0.7)] [data-theme=dark]:bg-lime-300",

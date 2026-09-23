@@ -55,7 +55,7 @@ export function CopyButton({
         copied
           ? "border-cyan-500/60 bg-vault-accent-soft text-vault-accent shadow-[0_0_16px_rgba(6,182,212,0.25)]"
           : failed
-            ? "border-fuchsia-500/50 bg-vault-fuchsia-soft text-vault-fuchsia"
+            ? "border-red-500/50 bg-vault-danger-soft text-vault-danger"
             : "border-line bg-vault-soft-2 text-ink-dim hover:border-cyan-500/50 hover:bg-vault-accent-softer hover:text-vault-accent"
       } ${className}`}
     >

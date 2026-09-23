@@ -83,7 +83,10 @@ export function VaultShell({
     credentials.find((c) => c.id === selectedCredentialId) ?? null;
 
   return (
-    <main className="landing-page relative flex h-screen min-h-[560px] flex-col overflow-hidden bg-abyss font-sans text-lg text-ink">
+    <main
+      className="landing-page relative flex h-screen min-h-[560px] flex-col overflow-hidden bg-abyss font-sans text-lg text-ink"
+      style={{ "--lp-mesh-b": "transparent" } as React.CSSProperties}
+    >
       <TextureLayers />
 
       <header className="relative z-10 flex shrink-0 items-center justify-between border-b border-line bg-vault-glass-strong px-4 py-3 backdrop-blur-md lg:px-5">
@@ -98,13 +101,12 @@ export function VaultShell({
             aria-hidden
             className="hidden font-mono text-[14px] uppercase tracking-[0.28em] text-ink-faint sm:inline"
           >
-            // vault_online
+            // boveda
           </span>
           <span className="live-indicator ml-1 hidden sm:inline-flex" aria-hidden />
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden font-mono text-[14px] uppercase tracking-[0.16em] text-ink-faint md:inline">
-            {String(credentials.length).padStart(3, "0")} items · zk
           </span>
           <ThemeSwitcher />
         </div>

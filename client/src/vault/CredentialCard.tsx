@@ -90,7 +90,7 @@ export function CredentialCard({
             </span>
           )}
           {breached ? (
-            <span className="rounded border border-rose-500/50 bg-vault-danger-soft px-1 py-px font-mono text-[13px] font-bold text-vault-danger">
+            <span className="rounded border border-red-500/50 bg-vault-danger-soft px-1 py-px font-mono text-[13px] font-bold text-vault-danger">
               !
             </span>
           ) : affected ? (

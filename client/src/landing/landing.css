@@ -59,16 +59,14 @@
   --vault-panel: transparent;
   --vault-accent-ink: #67e8f9;
   --vault-accent-deep: #22d3ee;
-  --vault-danger-ink: #fda4af;
+  --vault-danger-ink: #f87171;
   --vault-warn-ink: #fcd34d;
   --vault-ok-ink: #bef264;
-  --vault-fuchsia-ink: #f0abfc;
   --vault-accent-soft: rgba(6, 182, 212, 0.16);
   --vault-accent-softer: rgba(6, 182, 212, 0.1);
-  --vault-danger-soft: rgba(244, 63, 94, 0.18);
+  --vault-danger-soft: rgba(239, 68, 68, 0.18);
   --vault-warn-soft: rgba(245, 158, 11, 0.18);
   --vault-ok-soft: rgba(163, 230, 53, 0.12);
-  --vault-fuchsia-soft: rgba(217, 70, 239, 0.15);
 
   color-scheme: dark;
 }
@@ -107,16 +105,14 @@
   --vault-panel: #d0d0d7;
   --vault-accent-ink: #0e7490;
   --vault-accent-deep: #0891b2;
-  --vault-danger-ink: #be123c;
+  --vault-danger-ink: #dc2626;
   --vault-warn-ink: #a16207;
   --vault-ok-ink: #15803d;
-  --vault-fuchsia-ink: #a21caf;
   --vault-accent-soft: #c5f3fa;
   --vault-accent-softer: #e6fbfd;
-  --vault-danger-soft: #ffe1e5;
+  --vault-danger-soft: #fee2e2;
   --vault-warn-soft: #fef0c7;
   --vault-ok-soft: #d8f5e0;
-  --vault-fuchsia-soft: #f9e0fc;
 
   color-scheme: light;
 }
@@ -167,9 +163,6 @@
 @utility bg-vault-ok-soft {
   background-color: var(--vault-ok-soft);
 }
-@utility bg-vault-fuchsia-soft {
-  background-color: var(--vault-fuchsia-soft);
-}
 @utility text-vault-accent {
   color: var(--vault-accent-ink);
 }
@@ -184,9 +177,6 @@
 }
 @utility text-vault-ok {
   color: var(--vault-ok-ink);
-}
-@utility text-vault-fuchsia {
-  color: var(--vault-fuchsia-ink);
 }
 
 /* ── Custom utilities ── */

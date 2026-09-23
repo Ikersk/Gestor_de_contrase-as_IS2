@@ -79,7 +79,7 @@ function AuditBlock({
             </span>
           </div>
           {isBreached && (
-            <p className="mt-2 rounded border border-rose-500/40 bg-vault-danger-soft px-2 py-1.5 font-mono text-[14px] leading-relaxed text-vault-danger">
+            <p className="mt-2 rounded border border-red-500/40 bg-vault-danger-soft px-2 py-1.5 font-mono text-[14px] leading-relaxed text-vault-danger">
               Aparece en filtraciones conocidas. Cámbiala inmediatamente.
             </p>
           )}
@@ -183,8 +183,8 @@ export function CredentialDetailPanel({
                   {credential.title}
                 </h2>
                 {isBreached && (
-                  <span className="rounded border border-rose-500/50 bg-vault-danger-soft px-1.5 py-0.5 font-mono text-[13px] uppercase tracking-wider text-vault-danger">
-                    compromised
+                  <span className="rounded border border-red-500/50 bg-vault-danger-soft px-1.5 py-0.5 font-mono text-[13px] uppercase tracking-wider text-vault-danger">
+                    comprometida
                   </span>
                 )}
                 {credential.favorite && (
@@ -210,7 +210,7 @@ export function CredentialDetailPanel({
               type="button"
               onClick={() => onDelete(credential.id)}
               disabled={busy}
-              className="rounded-lg border border-fuchsia-500/50 bg-vault-fuchsia-soft px-3 py-1.5 font-mono text-[15px] uppercase tracking-wider text-vault-fuchsia transition-all hover:border-fuchsia-400/70 hover:bg-vault-fuchsia-soft disabled:opacity-50"
+              className="rounded-lg border border-red-500/50 bg-vault-danger-soft px-3 py-1.5 font-mono text-[15px] uppercase tracking-wider text-vault-danger transition-all hover:border-red-500/70 disabled:opacity-50"
             >
               Eliminar
             </button>
