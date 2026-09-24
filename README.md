@@ -2,6 +2,8 @@
 
 Gestor de contraseñas con arquitectura split-key y persistencia PostgreSQL en Supabase. La criptografía se ejecuta enteramente en el navegador; el servidor almacena material derivado y blobs cifrados sin nunca ver contraseñas ni claves en texto plano.
 
+> 📖 **Guía General de Procesos**: Para una explicación detallada, didáctica y con diagramas de flujo de todos los procesos del sistema (Zero-Knowledge, TOTP, Anti-Phishing, Auditoría HIBP y extensión), consulta [PROCESOS_DEL_SISTEMA.md](PROCESOS_DEL_SISTEMA.md).
+
 ## Requisitos
 
 - Node.js 20 o superior

@@ -3,11 +3,17 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { Pool } = require('pg');
 
-const databaseUrl = process.env.DATABASE_URL;
+const isLocalDb =
+  process.env.USE_LOCAL_DB === 'true' ||
+  !process.env.DATABASE_URL ||
+  process.env.DATABASE_URL.includes('TU_PROJECT_REF') ||
+  process.env.DATABASE_URL.includes('YOUR_PROJECT_REF');
 
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL must be set before starting the server');
-}
+if (isLocalDb) {
+  module.exports = require('./local-db');
+} else {
+  const databaseUrl = process.env.DATABASE_URL;
+
 
 const useSsl = process.env.DB_SSL !== 'false';
 const pool = new Pool({
@@ -50,3 +56,5 @@ module.exports = {
   closeDatabase,
   initializeDatabase,
 };
+}
+

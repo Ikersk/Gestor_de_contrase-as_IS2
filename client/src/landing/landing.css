@@ -1,0 +1,331 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-abyss: var(--lp-bg);
+  --color-surface: var(--lp-surface);
+  --color-surface-2: var(--lp-surface-2);
+  --color-line: var(--lp-line);
+  --color-line-strong: var(--lp-line-strong);
+  --color-ink: var(--lp-ink);
+  --color-ink-dim: var(--lp-ink-dim);
+  --color-ink-faint: var(--lp-ink-faint);
+  --color-blue-electric: #2563eb;
+  --color-blue-deep: #1d4ed8;
+  --color-blue-soft: var(--lp-blue-soft);
+  --color-blue-mid: var(--lp-blue-mid);
+
+  --font-display: "Clash Display", "Satoshi", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Courier New", monospace;
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+
+  --animate-grain: grain 800ms steps(4) infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-blink: blink 1.1s step-end infinite;
+  --animate-pulse-glow: pulse-glow 3.2s ease-in-out infinite;
+}
+
+/* ── Dark core (default) ── */
+.landing-page {
+  --lp-bg: #050505;
+  --lp-demo-bg: rgba(12, 12, 16, 0.92);
+  --lp-demo-header: rgba(28, 28, 34, 0.95);
+  --lp-demo-input: rgba(0, 0, 0, 0.7);
+  --lp-demo-block: rgba(0, 0, 0, 0.78);
+  --lp-surface: var(--lp-demo-bg);
+  --lp-surface-2: var(--lp-demo-header);
+  --lp-line: rgba(255, 255, 255, 0.09);
+  --lp-line-strong: rgba(255, 255, 255, 0.18);
+  --lp-ink: #f4f4f5;
+  --lp-ink-dim: #a1a1aa;
+  --lp-ink-faint: #71717a;
+  --lp-blue-soft: #93c5fd;
+  --lp-blue-mid: #60a5fa;
+  --lp-dot: rgba(255, 255, 255, 0.14);
+  --lp-dot-opacity: 0.85;
+  --lp-dot-overlay: rgba(255, 255, 255, 0.55);
+  --lp-dot-overlay-opacity: 0.0;
+  --lp-grain-opacity: 0.055;
+  --lp-scanline: rgba(0, 0, 0, 0.22);
+  --lp-mesh-a: rgba(37, 99, 235, 0.16);
+  --lp-mesh-b: rgba(37, 99, 235, 0.1);
+  --lp-glow: rgba(37, 99, 235, 0.35);
+  --lp-glow-strong: rgba(37, 99, 235, 0.55);
+  --lp-terminal-bg: var(--lp-demo-bg);
+  --lp-watermark-opacity: 0.03;
+  --lp-topbar: #111114;
+  --vault-page-bg: var(--lp-bg);
+
+  /* Vault glass — legible on pure black */
+  --vault-glass: rgba(0, 0, 0, 0.48);
+  --vault-glass-strong: rgba(0, 0, 0, 0.62);
+  --vault-input: rgba(0, 0, 0, 0.55);
+  --vault-soft: rgba(255, 255, 255, 0.05);
+  --vault-soft-2: rgba(255, 255, 255, 0.08);
+  --vault-track: rgba(255, 255, 255, 0.12);
+  --vault-panel: transparent;
+  --vault-accent-ink: #60a5fa;
+  --vault-accent-deep: #3b82f6;
+  --vault-danger-ink: #f87171;
+  --vault-warn-ink: #fcd34d;
+  --vault-ok-ink: #bef264;
+  --vault-accent-soft: rgba(37, 99, 235, 0.13);
+  --vault-accent-softer: rgba(37, 99, 235, 0.3);
+  --vault-danger-soft: rgba(239, 68, 68, 0.3);
+  --vault-warn-soft: rgba(245, 158, 11, 0.3);
+  --vault-ok-soft: rgba(163, 230, 53, 0.3);
+
+  color-scheme: dark;
+}
+
+/* ── Light variant ── */
+[data-theme="light"] .landing-page {
+  --lp-bg: #b8b8bf;
+  --lp-demo-bg: rgba(255, 255, 255, 0.94);
+  --lp-demo-header: rgba(248, 248, 250, 0.97);
+  --lp-demo-input: rgba(255, 255, 255, 0.88);
+  --lp-demo-block: rgba(255, 255, 255, 0.9);
+  --lp-surface: var(--lp-demo-bg);
+  --lp-surface-2: var(--lp-demo-header);
+  --lp-line: rgba(0, 0, 0, 0.22);
+  --lp-line-strong: rgba(0, 0, 0, 0.36);
+  --lp-ink: #121214;
+  --lp-ink-dim: #27272a;
+  --lp-ink-faint: #3f3f46;
+  --lp-blue-soft: #1e40af;
+  --lp-blue-mid: #1d4ed8;
+  --lp-dot: rgba(0, 0, 0, 0.42);
+  --lp-dot-opacity: 1;
+  --lp-dot-overlay: rgba(0, 0, 0, 0.55);
+  /* Como oscuro: sin puntos encima de las ventanas — solo TextureLayers en el fondo */
+  --lp-dot-overlay-opacity: 0;
+  --lp-grain-opacity: 0.02;
+  --lp-scanline: rgba(0, 0, 0, 0.04);
+  --lp-mesh-a: rgba(37, 99, 235, 0.06);
+  --lp-mesh-b: rgba(37, 99, 235, 0.05);
+  --lp-glow: rgba(29, 78, 216, 0.28);
+  --lp-glow-strong: rgba(29, 78, 216, 0.45);
+  --lp-terminal-bg: var(--lp-demo-bg);
+  --lp-watermark-opacity: 0.1;
+  --lp-topbar: #ffffff;
+  --vault-page-bg: #d1d1d6;
+
+  /* Vault light — fully opaque windows (no alpha), clear separation from page */
+  --vault-glass: #ffffff;
+  --vault-glass-strong: #ffffff;
+  --vault-input: #ffffff;
+  --vault-soft: #f0f0f3;
+  --vault-soft-2: #e4e4e9;
+  --vault-track: #a1a1aa;
+  /* Igual que oscuro: la columna de la lista es el fondo (ve TextureLayers), no una ventana */
+  --vault-panel: transparent;
+  --vault-accent-ink: #1e40af;
+  --vault-accent-deep: #1d4ed8;
+  --vault-danger-ink: #dc2626;
+  --vault-warn-ink: #a16207;
+  --vault-ok-ink: #15803d;
+  --vault-accent-soft: #dbeafe;
+  --vault-accent-softer: #eff6ff;
+  --vault-danger-soft: #fee2e2;
+  --vault-warn-soft: #fef0c7;
+  --vault-ok-soft: #d8f5e0;
+
+  color-scheme: light;
+}
+
+/* Light vault: opaque panels — blur/texture only muddies text */
+[data-theme="light"] .landing-page,
+[data-theme="light"] .landing-page *,
+[data-theme="light"] .landing-page *::before,
+[data-theme="light"] .landing-page *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── Vault surfaces (theme-aware) ── */
+@utility bg-vault-page {
+  background-color: var(--vault-page-bg);
+}
+@utility bg-vault-glass {
+  background-color: var(--vault-glass);
+}
+@utility bg-vault-glass-strong {
+  background-color: var(--vault-glass-strong);
+}
+@utility bg-vault-input {
+  background-color: var(--vault-input);
+}
+@utility bg-vault-soft {
+  background-color: var(--vault-soft);
+}
+@utility bg-vault-soft-2 {
+  background-color: var(--vault-soft-2);
+}
+@utility bg-vault-track {
+  background-color: var(--vault-track);
+}
+@utility bg-vault-panel {
+  background-color: var(--vault-panel);
+}
+@utility bg-vault-accent-soft {
+  background-color: var(--vault-accent-soft);
+}
+@utility bg-vault-accent-softer {
+  background-color: var(--vault-accent-softer);
+}
+@utility bg-vault-danger-soft {
+  background-color: var(--vault-danger-soft);
+}
+@utility bg-vault-warn-soft {
+  background-color: var(--vault-warn-soft);
+}
+@utility bg-vault-ok-soft {
+  background-color: var(--vault-ok-soft);
+}
+@utility text-vault-accent {
+  color: var(--vault-accent-ink);
+}
+@utility text-vault-accent-deep {
+  color: var(--vault-accent-deep);
+}
+@utility text-vault-danger {
+  color: var(--vault-danger-ink);
+}
+@utility text-vault-warn {
+  color: var(--vault-warn-ink);
+}
+@utility text-vault-ok {
+  color: var(--vault-ok-ink);
+}
+
+/* ── Custom utilities ── */
+@utility bg-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 180px 180px;
+}
+
+@utility bg-dot-grid {
+  background-image: radial-gradient(var(--lp-dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+@utility bg-dot-grid-overlay {
+  background-image: radial-gradient(var(--lp-dot-overlay) 1.25px, transparent 1.25px);
+  background-size: 16px 16px;
+}
+
+@utility bg-scanlines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 2px,
+    var(--lp-scanline) 2px 3px
+  );
+}
+
+@utility border-glow {
+  border-color: color-mix(in srgb, #2563eb 70%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #2563eb 45%, transparent),
+    0 0 28px var(--lp-glow),
+    inset 0 0 24px rgba(37, 99, 235, 0.06);
+}
+
+@utility text-glow-blue {
+  text-shadow: 0 0 28px rgba(37, 99, 235, 0.55);
+}
+
+@utility text-glow-blue-soft {
+  text-shadow: 0 0 18px color-mix(in srgb, var(--lp-blue-soft) 55%, transparent);
+}
+
+/* ── Reveal (IntersectionObserver) ── */
+.lp-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 640ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 640ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lp-reveal.revealed,
+[data-reveal].revealed .lp-reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Terminal typing ── */
+.lp-term-line {
+  display: block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+}
+.revealed .lp-term-line {
+  animation: lp-typing 1.1s steps(46, end) forwards;
+  animation-delay: calc(320ms + var(--i, 0) * 650ms);
+}
+@keyframes lp-typing {
+  0% {
+    max-width: 0;
+    opacity: 1;
+  }
+  100% {
+    max-width: calc(var(--chars, 46) * 1ch);
+    opacity: 1;
+  }
+}
+
+/* Fallback: sin soporte de steps anchos / móvil estrecho */
+@media (max-width: 640px) {
+  .lp-term-line {
+    max-width: none;
+    white-space: normal;
+  }
+  .revealed .lp-term-line {
+    animation: lp-fade-line 400ms ease forwards;
+    animation-delay: calc(200ms + var(--i, 0) * 380ms);
+  }
+}
+@keyframes lp-fade-line {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── Keyframes ── */
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-1.5%, 1%); }
+  50% { transform: translate(1%, -1.5%); }
+  75% { transform: translate(-0.5%, -1%); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page *,
+  .landing-page *::before,
+  .landing-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .lp-reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .lp-term-line {
+    max-width: none;
+    opacity: 1;
+  }
+}

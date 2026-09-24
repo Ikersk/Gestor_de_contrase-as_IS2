@@ -9,6 +9,7 @@
     "start": "node src/app.js",
     "db:check": "node src/migrate.js --check",
     "db:migrate": "node src/migrate.js",
+    "db:seed": "node src/seed.js",
     "test": "node --test"
   },
   "engines": {

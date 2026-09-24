@@ -14,8 +14,13 @@ import {
   removeCredential,
   updateCredential,
 } from "./vault";
+import "./landing/landing.css";
 import "./styles.css";
+import { Landing } from "./landing/Landing";
+import { TextureLayers } from "./landing/TextureLayers";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import { FIELD_LIMITS } from "./validation";
+import { analyzeUrl } from "./anti-phishing";
 import {
   DEFAULT_PASSWORD_CHARACTER_SELECTION,
   generateSecurePassword,
@@ -24,159 +29,22 @@ import {
   PASSWORD_GENERATOR_MIN_LENGTH,
   PasswordCharacterOption,
 } from "./password-generator";
-import { getTotpSnapshot } from "./totp";
 import { auditVault } from "./vault-health";
 import type { VaultHealthAlert } from "./vault-health";
 import { checkCredentialsBreach } from "./hibp";
-import { SecurityDashboard } from "./SecurityDashboard";
-import { CredentialDetail } from "./CredentialDetail";
+import { VaultShell } from "./vault/VaultShell";
 
 type View = "login" | "register";
 type Toast = { id: number; message: string; type: "success" | "error"; exiting?: boolean };
-function getFaviconUrl(url: string): string | null {
-  try {
-    const { hostname } = new URL(url);
-    if (!hostname) return null;
-    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
-  } catch {
-    return null;
-  }
-}
 
-async function copyToClipboard(text: string): Promise<boolean> {
-  if (!navigator.clipboard) return false;
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-type Theme = "dark" | "light";
-
-const THEME_KEY = "arca_theme";
-
-function getInitialTheme(): Theme {
-  const stored = localStorage.getItem(THEME_KEY);
-  if (stored === "light" || stored === "dark") return stored;
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-}
-
-function applyTheme(theme: Theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-}
-
-function ThemeSwitcher() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
-
-  useEffect(() => {
-    applyTheme(theme);
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: light)");
-    function onChange(e: MediaQueryListEvent) {
-      if (!localStorage.getItem(THEME_KEY)) {
-        setTheme(e.matches ? "light" : "dark");
-      }
-    }
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-
-  const toggle = useCallback(() => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  }, []);
-
-  return (
-    <button
-      className="theme-toggle"
-      type="button"
-      onClick={toggle}
-      aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-    >
-      {theme === "dark" ? "☀" : "☾"}
-    </button>
-  );
-}
 // Estado inicial reutilizado al abrir el formulario y al limpiar una credencial.
 const emptyCredential: Credential = {
   title: "",
   username: "",
   password: "",
   urls: [""],
+  favorite: false,
 };
-
-function TotpCode({ secret, onCopy }: { secret: string; onCopy?: () => void }) {
-  const [snapshot, setSnapshot] = useState<ReturnType<typeof getTotpSnapshot> | null>(null);
-  const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    function refresh() {
-      try {
-        const nextSnapshot = getTotpSnapshot(secret);
-        if (active) {
-          setSnapshot(nextSnapshot);
-          setError("");
-          setCopied(false);
-        }
-      } catch {
-        if (active) setError("No se pudo calcular el código TOTP");
-      }
-    }
-
-    refresh();
-    const intervalId = window.setInterval(refresh, 1000);
-    return () => {
-      active = false;
-      window.clearInterval(intervalId);
-    };
-  }, [secret]);
-
-  async function copyCode() {
-    if (!snapshot || !navigator.clipboard) {
-      setError("El navegador no permite copiar el código");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(snapshot.code);
-      setCopied(true);
-      onCopy?.();
-    } catch {
-      setError("No se pudo copiar el código");
-    }
-  }
-
-  if (error) return <p className="totp-error" role="status">{error}</p>;
-  if (!snapshot) return <p className="totp-loading" role="status">Calculando código...</p>;
-
-  const isCritical = snapshot.remainingSeconds <= 5;
-
-  return (
-    <div className={`totp-panel${isCritical ? " totp-critical" : ""}`} aria-label="Código de autenticación de dos factores">
-      <div className="totp-panel-heading">
-        <span>Código 2FA</span>
-        <span>{snapshot.remainingSeconds}s</span>
-      </div>
-      <div className="totp-code-row">
-        <output className="totp-code" aria-live="polite" aria-label="Código TOTP">
-          {snapshot.code}
-        </output>
-        <button className="totp-copy-button" type="button" onClick={copyCode}>
-          {copied ? "Copiado" : "Copiar"}
-        </button>
-      </div>
-      <div className={`totp-progress${isCritical ? " totp-progress-critical" : ""}`} role="progressbar" aria-label="Tiempo restante del código" aria-valuemin={0} aria-valuemax={30} aria-valuenow={snapshot.remainingSeconds}>
-        <span style={{ transform: `scaleX(${snapshot.progress})` }} />
-      </div>
-    </div>
-  );
-}
 
 const passwordCharacterLabels: Record<PasswordCharacterOption, string> = {
   uppercase: "Mayúsculas",
@@ -617,321 +485,6 @@ function AuthPanel({
   );
 }
 
-function CryptoDemo() {
-  const [input, setInput] = useState("");
-  const [cipher, setCipher] = useState<{ iv: string; ciphertext: string } | null>(null);
-  const [encrypting, setEncrypting] = useState(false);
-
-  const encrypt = useCallback(async (plain: string) => {
-    if (!plain) { setCipher(null); return; }
-    setEncrypting(true);
-    try {
-      const enc = new TextEncoder();
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt"]);
-      const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plain));
-      setCipher({
-        iv: Array.from(iv).map((b) => b.toString(16).padStart(2, "0")).join(""),
-        ciphertext: Array.from(new Uint8Array(ct)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 96) + "…",
-      });
-    } catch { setCipher(null); }
-    finally { setEncrypting(false); }
-  }, []);
-
-  useEffect(() => {
-    const t = setTimeout(() => encrypt(input), 300);
-    return () => clearTimeout(t);
-  }, [input, encrypt]);
-
-  return (
-    <div className="crypto-demo">
-      <div className="demo-header">
-        <span className="demo-dot" />
-        <span className="demo-dot demo-dot--warn" />
-        <span className="demo-dot demo-dot--safe" />
-        <span className="demo-title">crypto-demo.local</span>
-      </div>
-      <div className="demo-body">
-        <label className="demo-label" htmlFor="demo-input">Texto plano</label>
-        <input
-          id="demo-input"
-          className="demo-input"
-          type="text"
-          placeholder="Escribe algo para cifrar…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <div className="demo-output-grid">
-          <div className="demo-output-block">
-            <span className="demo-tag">CIPHERTEXT</span>
-            <code className="demo-code">
-              {cipher ? cipher.ciphertext : "af09c1b3e7…"}
-            </code>
-          </div>
-          <div className="demo-output-block">
-            <span className="demo-tag">IV (12 bytes)</span>
-            <code className="demo-code demo-code--iv">
-              {cipher ? cipher.iv : "a4f208e19c3b…"}
-            </code>
-          </div>
-        </div>
-        <p className="demo-footnote">
-          {encrypting
-            ? "Cifrando con AES-256-GCM…"
-            : cipher
-              ? "Generado localmente con Web Crypto API. El servidor jamás ve este dato."
-              : "Escribe para ver cómo se cifra en tu navegador."}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** Página pública que explica el modelo zero-knowledge y dirige al formulario de acceso. */
-function Landing({ onAccess }: { onAccess: () => void }) {
-  const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setVisibleSections((prev) => new Set(prev).add(entry.target.getAttribute("data-reveal") || ""));
-          }
-        });
-      },
-      { threshold: 0.15, rootMargin: "0px 0px -40px 0px" },
-    );
-    document.querySelectorAll("[data-reveal]").forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
-
-  const reveal = (id: string) => visibleSections.has(id) ? "revealed" : "";
-
-  return (
-    <div className="landing-page">
-      <div className="landing-grid-bg" aria-hidden="true" />
-      <header className="site-header">
-        <a className="brand" href="/" aria-label="Arca, inicio">
-          <span className="brand-symbol">A</span>
-          <span>arca</span>
-        </a>
-        <nav className="site-nav" aria-label="Navegación principal">
-          <a href="#arquitectura">Arquitectura</a>
-          <a href="#funcionalidades">Funcionalidades</a>
-          <button type="button" onClick={onAccess}>
-            Entrar
-          </button>
-          <ThemeSwitcher />
-        </nav>
-      </header>
-      <main>
-        {/* ── Hero ── */}
-        <section className="hero-section" aria-labelledby="hero-title">
-          <div className="hero-copy">
-            <div className="hero-badges">
-              <span className="security-badge">Zero-Knowledge</span>
-            </div>
-            <h1 id="hero-title">
-              Tus secretos nunca salen de
-              <br />
-              <span>tu dispositivo.</span>
-            </h1>
-            <p className="hero-description">
-              Arca deriva tus claves de cifrado directamente en tu navegador con
-              y cifra cada credencial antes de tocar la red.
-              El servidor solo almacena blobs indescifrables.
-            </p>
-            <div className="hero-actions">
-              <button className="primary-button hero-cta" type="button" onClick={onAccess}>
-                Probar Bóveda <span aria-hidden="true">↗</span>
-              </button>
-            </div>
-          </div>
-          <CryptoDemo />
-        </section>
-
-        {/* ── Signal bar ── */}
-        <section className="signal-bar" aria-label="Principios de seguridad">
-          <span><i className="signal-dot" /> Cifrado local</span>
-          <span><i className="signal-dot" /> Tu clave nunca se almacena</span>
-          <span><i className="signal-dot" /> Sesiones temporales</span>
-          <span><i className="signal-dot" /> Auditoría en tiempo real</span>
-        </section>
-
-        {/* ── Architecture: Backend Ciego ── */}
-        <section className="arch-section" id="arquitectura" aria-labelledby="arch-title" data-reveal="arch">
-          <div className={`section-intro reveal-item ${reveal("arch")}`}>
-            <p className="kicker">Backend Ciego — Zero-Knowledge</p>
-            <h2 id="arch-title">Así se ve la privacidad por diseño.</h2>
-            <p>Tus credenciales nunca están en texto plano en ningún servidor. Cada paso ocurre en tu RAM.</p>
-          </div>
-          <div className="arch-steps">
-            <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "100ms" }}>
-              <span className="arch-step-num">01</span>
-              <div className="arch-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
-                  <circle cx="12" cy="12" r="4"/>
-                </svg>
-              </div>
-              <h3>Derivación de clave</h3>
-              <p>Arca genera tu clave en la RAM del navegador. Nunca sale de tu dispositivo.</p>
-              <span className="arch-tag">600K iteraciones</span>
-            </article>
-            <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "250ms" }}>
-              <span className="arch-step-num">02</span>
-              <div className="arch-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  <circle cx="12" cy="16" r="1"/>
-                </svg>
-              </div>
-              <h3>Cifrado AES-GCM</h3>
-              <p>Cada payload se cifra antes de tocar la red. El navegador genera solo texto ilegibles.</p>
-              <span className="arch-tag">AES-256-GCM</span>
-            </article>
-            <article className={`arch-card reveal-item ${reveal("arch")}`} style={{ animationDelay: "400ms" }}>
-              <span className="arch-step-num">03</span>
-              <div className="arch-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-                </svg>
-              </div>
-              <h3>La base de datos no conoce tus credenciales</h3>
-              <p>El servidor solo recibe datos cifrados. Arca no puede leer tus credenciales — solo tú tienes la clave.</p>
-              <span className="arch-tag">Zero-Knowledge</span>
-            </article>
-          </div>
-        </section>
-
-        {/* ── Features showcase ── */}
-        <section className="features-section" id="funcionalidades" aria-labelledby="features-title" data-reveal="features">
-          <div className={`section-intro reveal-item ${reveal("features")}`}>
-            <p className="kicker">Funcionalidades avanzadas</p>
-            <h2 id="features-title">Seguridad sin complejidad.</h2>
-          </div>
-          <div className="features-grid">
-            <article className={`feature-card reveal-item ${reveal("features")}`} style={{ animationDelay: "80ms" }}>
-              <div className="feature-icon feature-icon--health">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                </svg>
-              </div>
-              <h3>Auditoría de Salud</h3>
-              <p>Analiza entropía, detecta contraseñas débiles y reutilizadas en tiempo real. Scores y métricas para cada credencial.</p>
-              <span className="feature-tag">Entropía · Scores · Métricas</span>
-            </article>
-            <article className={`feature-card reveal-item ${reveal("features")}`} style={{ animationDelay: "200ms" }}>
-              <div className="feature-icon feature-icon--breach">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-              </div>
-              <h3>Alertas de Brechas HIBP</h3>
-              <p>
-                Verifica credenciales contra Have I Been Pwned usando k-Anonymity:
-                solo el hash SHA-1 (5 prefijos) sale de tu dispositivo, nunca tu contraseña completa.
-              </p>
-              <span className="feature-tag">k-Anonymity · SHA-1 local</span>
-            </article>
-            <article className={`feature-card reveal-item ${reveal("features")}`} style={{ animationDelay: "320ms" }}>
-              <div className="feature-icon feature-icon--totp">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-              </div>
-              <h3>Autenticador TOTP 2FA</h3>
-              <p>Genera códigos de autenticación de dos factores directamente desde tu bóveda. Cronómetro visual en tiempo real.</p>
-              <span className="feature-tag">TOTP · Cronómetro en vivo</span>
-            </article>
-          </div>
-        </section>
-
-        {/* ── FAQ ── */}
-        <section className="faq-section" aria-labelledby="faq-title" data-reveal="faq">
-          <div className={`section-intro reveal-item ${reveal("faq")}`}>
-            <p className="kicker">Preguntas honestas</p>
-            <h2 id="faq-title">Lo que necesitas saber antes de empezar.</h2>
-          </div>
-          <div className="faq-list">
-            <details>
-              <summary>¿Puede Arca ver mis contraseñas?</summary>
-              <p>No. Tus credenciales se cifran en el dispositivo y el servidor no recibe los valores legibles. El cifrado ocurre 100% en tu navegador con Web Crypto API.</p>
-            </details>
-            <details>
-              <summary>¿Qué pasa si olvido mi contraseña maestra?</summary>
-              <p>No existe una copia de recuperación. Es la consecuencia directa de que nadie más — ni siquiera nosotros — pueda abrir tu bóveda.</p>
-            </details>
-            <details>
-              <summary>¿Cómo funciona la verificación de brechas?</summary>
-              <p>Usamos k-Anonymity con HIBP: calculamos SHA-1 de tu contraseña localmente y solo enviamos los 5 primeros caracteres del hash. Tu contraseña completa nunca sale del navegador.</p>
-            </details>
-          </div>
-        </section>
-
-        {/* ── Closing CTA ── */}
-        <section className="closing-section" data-reveal="closing">
-          <div className={`closing-inner reveal-item ${reveal("closing")}`}>
-            <h2>
-              Menos exposición.
-              <br />
-              <span>Más control.</span>
-            </h2>
-            <p className="closing-description">
-              Tus secretos son tuyos. Arca solo guarda lo que tú decides cifrar.
-            </p>
-            <button className="primary-button hero-cta" type="button" onClick={onAccess}>
-              Abrir mi bóveda <span aria-hidden="true">↗</span>
-            </button>
-          </div>
-        </section>
-      </main>
-      <footer className="site-footer">
-        <span>arca / privacidad primero</span>
-        <span>Construido para guardar lo importante</span>
-      </footer>
-    </div>
-  );
-}
-
-function VaultSkeleton() {
-  return (
-    <div className="vault-skeleton" aria-hidden="true">
-      <div className="skeleton-row">
-        <div className="skeleton-block skeleton-progress" style={{ width: "100%", height: 8 }} />
-      </div>
-      <div className="skeleton-stats">
-        <div className="skeleton-block skeleton-stat" />
-        <div className="skeleton-block skeleton-stat" />
-        <div className="skeleton-block skeleton-stat" />
-      </div>
-      {[0, 1, 2].map((i) => (
-        <div className="skeleton-card" key={i}>
-          <div className="skeleton-row">
-            <div className="skeleton-block skeleton-avatar" />
-            <div className="skeleton-lines">
-              <div className="skeleton-block skeleton-line skeleton-line--medium" />
-              <div className="skeleton-block skeleton-line skeleton-line--short" />
-            </div>
-            <div className="skeleton-actions">
-              <div className="skeleton-block skeleton-action" />
-              <div className="skeleton-block skeleton-action" />
-              <div className="skeleton-block skeleton-action" />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** Coordina la navegación, la sesión en memoria y las operaciones CRUD de la bóveda. */
 function App() {
   const [view, setView] = useState<View>("login");
@@ -1045,7 +598,6 @@ function App() {
         setDecrypting(true);
         setCredentials(await listCredentials());
         setDecrypting(false);
-        setMessage("Bóveda desbloqueada en memoria.");
       }
       setMasterPassword("");
       setConfirmMasterPassword("");
@@ -1174,12 +726,45 @@ function App() {
       }));
     }
   }
+  function clearOrRemoveCredentialUrl(index: number) {
+    if (credential.urls.length > 1) {
+      removeCredentialUrl(index);
+    } else {
+      updateCredentialUrl(index, "");
+    }
+  }
+  function fixCredentialUrlWithTarget(index: number, targetDomain: string) {
+    const currentUrl = credential.urls[index] || "";
+    try {
+      const parsed = new URL(currentUrl.startsWith("http") ? currentUrl : `https://${currentUrl}`);
+      parsed.hostname = targetDomain;
+      parsed.protocol = "https:";
+      updateCredentialUrl(index, parsed.toString());
+    } catch {
+      updateCredentialUrl(index, `https://${targetDomain}`);
+    }
+  }
   /** Crea o actualiza una credencial; el módulo vault cifra antes de llamar a la API. */
   async function handleCredentialSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
+
+    for (const url of credential.urls) {
+      if (url && url.trim().length > 3) {
+        const report = analyzeUrl(url.trim());
+        if (report.riskLevel === "danger") {
+          setError(
+            `Bloqueado por Escudo Anti-Phishing: La dirección "${report.hostname}" ha sido detectada como suplantación (${report.threatTitle}). El sistema prohíbe almacenar accesos a páginas fraudulentas. Debes corregir la dirección o eliminarla para poder guardar.`
+          );
+          setBusy(false);
+          return;
+        }
+      }
+    }
+
     try {
+
       if (editingId === null) {
         const created = await createCredential(credential);
         setCredentials((current) => [...current, created]);
@@ -1258,6 +843,26 @@ function App() {
     }
   }
 
+  /** Alterna el favorito cifrando de nuevo el blob completo. */
+  async function handleToggleFavorite(id: number | string) {
+    const item = credentials.find((c) => c.id === id);
+    if (!item) return;
+    try {
+      const updated = await updateCredential(id, {
+        ...item,
+        favorite: !item.favorite,
+      });
+      setCredentials((current) =>
+        current.map((c) => (c.id === id ? updated : c)),
+      );
+    } catch (favError) {
+      addToast(
+        favError instanceof Error ? favError.message : "No se pudo actualizar el favorito",
+        "error",
+      );
+    }
+  }
+
   if (!authenticated && !showAccess)
     return (
       <Landing
@@ -1269,168 +874,92 @@ function App() {
     );
   if (!authenticated)
     return (
-      <main className="auth-page">
-        <header className="site-header">
-          <a className="brand" href="/" aria-label="Arca, inicio">
-            <span className="brand-symbol">A</span>
-            <span>arca</span>
-          </a>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <button
-              className="back-link"
-              type="button"
-              onClick={() => setShowAccess(false)}
-            >
-              Volver al inicio
-            </button>
-            <ThemeSwitcher />
+      <main className="landing-page relative isolate">
+        <TextureLayers />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-0 flex justify-center overflow-hidden"
+        >
+          <span className="translate-y-[28%] select-none font-display text-[42vw] font-bold leading-none tracking-tighter text-ink opacity-[var(--lp-watermark-opacity)]">
+            ARCA
+          </span>
+        </div>
+        <div className="relative z-10 min-h-screen">
+          <div className="relative z-20 w-full border-b border-line bg-[var(--lp-topbar)]">
+            <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-6 py-6">
+              <a
+                className="group inline-flex items-center gap-2.5 font-display text-[17px] font-semibold tracking-[0.2em] uppercase text-ink"
+                href="/"
+                aria-label="Arca, inicio"
+              >
+                <span className="grid h-8 w-8 place-items-center rounded-md bg-blue-electric font-mono text-[13px] font-bold tracking-normal text-abyss shadow-[0_0_18px_rgba(37,99,235,0.45)] transition-shadow group-hover:shadow-[0_0_28px_rgba(37,99,235,0.7)]">
+                  A
+                </span>
+                arca
+              </a>
+              <nav className="flex items-center gap-7 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-dim" aria-label="Navegación">
+                <button
+                  className="rounded-full border border-line px-4 py-1.5 text-ink transition hover:border-glow hover:text-blue-electric"
+                  type="button"
+                  onClick={() => setShowAccess(false)}
+                >
+                  Volver al inicio
+                </button>
+                <ThemeSwitcher />
+              </nav>
+            </header>
           </div>
-        </header>
-        <AuthPanel
-          view={view}
-          setView={(nextView) => {
-            setView(nextView);
-            setError("");
-            setMessage("");
-            setConfirmMasterPassword("");
-            setShowMasterPassword(false);
-            setShowConfirmMasterPassword(false);
-          }}
-          email={email}
-          setEmail={setEmail}
-          masterPassword={masterPassword}
-          setMasterPassword={setMasterPassword}
-          confirmMasterPassword={confirmMasterPassword}
-          setConfirmMasterPassword={setConfirmMasterPassword}
-          showMasterPassword={showMasterPassword}
-          setShowMasterPassword={setShowMasterPassword}
-          showConfirmMasterPassword={showConfirmMasterPassword}
-          setShowConfirmMasterPassword={setShowConfirmMasterPassword}
-          busy={busy}
-          message={message}
-          error={error}
-          onSubmit={handleSubmit}
-        />
+          <div className="auth-page">
+            <AuthPanel
+              view={view}
+              setView={(nextView) => {
+                setView(nextView);
+                setError("");
+                setMessage("");
+                setConfirmMasterPassword("");
+                setShowMasterPassword(false);
+                setShowConfirmMasterPassword(false);
+              }}
+              email={email}
+              setEmail={setEmail}
+              masterPassword={masterPassword}
+              setMasterPassword={setMasterPassword}
+              confirmMasterPassword={confirmMasterPassword}
+              setConfirmMasterPassword={setConfirmMasterPassword}
+              showMasterPassword={showMasterPassword}
+              setShowMasterPassword={setShowMasterPassword}
+              showConfirmMasterPassword={showConfirmMasterPassword}
+              setShowConfirmMasterPassword={setShowConfirmMasterPassword}
+              busy={busy}
+              message={message}
+              error={error}
+              onSubmit={handleSubmit}
+            />
+          </div>
+        </div>
       </main>
     );
 
   return (
-    <main className="app-shell vault-shell">
-      <header className="workspace-header">
-        <a className="brand" href="/" aria-label="Arca, inicio">
-          <span className="brand-symbol">A</span>
-          <span>arca</span>
-        </a>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button
-            className="text-button"
-            type="button"
-            onClick={handleLogout}
-            disabled={busy}
-          >
-            {busy ? "Cerrando..." : "Cerrar sesión"}
-          </button>
-          <ThemeSwitcher />
-        </div>
-      </header>
-      {decrypting ? (
-        <VaultSkeleton />
-      ) : (<>
-      <SecurityDashboard
-        credentials={credentials}
-        healthReport={healthReport}
-        breachedCount={breachedIds.size}
-        breachError={breachError}
-      />
-      <div className="vault-split-container">
-        <section className="credential-list-panel" aria-label="Lista de credenciales">
-          <div className="credential-list-header">
-            <div className="credential-search-wrapper">
-              <svg className="credential-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input
-                className="credential-search-input"
-                type="text"
-                placeholder="Buscar credenciales..."
-                aria-label="Buscar credenciales"
-              />
-            </div>
-            <button className="credential-add-button" type="button" onClick={openNewCredentialModal}>
-              + Nueva
-            </button>
-          </div>
-          <div className="credential-items-list">
-            {credentials.length === 0 && (
-              <div className="credential-list-empty">
-                <div className="credential-list-empty-icon">+</div>
-                <p>Añade tu primer acceso para tenerlo disponible cuando lo necesites.</p>
-              </div>
-            )}
-            {credentials.map((item) => {
-              const firstUrl = item.urls.find((u) => u.length > 0);
-              const faviconUrl = firstUrl ? getFaviconUrl(firstUrl) : null;
-              const isAffected = affectedIds.has(item.id);
-              const isBreached = breachedIds.has(item.id);
-              const hasTotp = Boolean(item.totpSecret);
-              const isSelected = selectedCredentialId === item.id;
-
-              return (
-                <button
-                  className={`credential-item ${isSelected ? "credential-item--active" : ""} ${isAffected ? "credential-item--affected" : ""}`}
-                  type="button"
-                  key={item.id}
-                  onClick={() => setSelectedCredentialId(item.id)}
-                >
-                  <div className="credential-item-avatar">
-                    {faviconUrl ? (
-                      <img
-                        className="credential-item-favicon"
-                        src={faviconUrl}
-                        alt=""
-                        width="24"
-                        height="24"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                      />
-                    ) : null}
-                    <span className={`credential-item-avatar-fallback ${faviconUrl ? "credential-item-avatar-fallback--hidden" : ""}`}>
-                      {item.title.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="credential-item-content">
-                    <span className="credential-item-title">{item.title}</span>
-                    <span className="credential-item-username">{item.username}</span>
-                  </div>
-                  <div className="credential-item-badges">
-                    {hasTotp && <span className="credential-item-badge credential-item-badge--2fa">2FA</span>}
-                    {isBreached && <span className="credential-item-badge credential-item-badge--breach">!</span>}
-                    {!isBreached && isAffected && <span className="credential-item-badge credential-item-badge--weak">!</span>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="sidebar-footer">
-            <button className="sidebar-account-button" type="button" onClick={openAccountModal}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-              Mi Cuenta
-            </button>
-          </div>
-        </section>
-        <section className="credential-detail-panel" aria-label="Detalle de credencial">
-          <CredentialDetail
-            credential={credentials.find(c => c.id === selectedCredentialId) ?? null}
-            onEdit={openEditCredentialModal}
-            onDelete={(id) => setDeletingId(id)}
-            breachedIds={breachedIds}
-            busy={busy}
-          />
-        </section>
-      </div>
+    <VaultShell
+      decrypting={decrypting}
+      credentials={credentials}
+      selectedCredentialId={selectedCredentialId}
+      healthReport={healthReport}
+      affectedIds={affectedIds}
+      breachedIds={breachedIds}
+      breachError={breachError}
+      isCheckingBreach={isCheckingBreach}
+      busy={busy}
+      onSelectCredential={setSelectedCredentialId}
+      onToggleFavorite={handleToggleFavorite}
+      onCheckBreach={handleCheckBreach}
+      onLogout={handleLogout}
+      onOpenAccount={openAccountModal}
+      onOpenNew={openNewCredentialModal}
+      onOpenEdit={openEditCredentialModal}
+      onRequestDelete={setDeletingId}
+    >
       <AccountModal
         open={isAccountModalOpen}
         onClose={closeAccountModal}
@@ -1442,15 +971,15 @@ function App() {
         isDeleting={isDeletingAccount}
         deleteError={error}
       />
-        <dialog className="credential-modal" ref={credentialModalRef} onCancel={closeCredentialModal}>
-          <div className="section-heading">
-            <h2 id="composer-title">
-              {editingId === null ? "Guardar un acceso" : "Actualizar acceso"}
-            </h2>
-            <button className="modal-close-button" type="button" onClick={closeCredentialModal} aria-label="Cerrar modal">
-              ×
-            </button>
-          </div>
+      <dialog className="credential-modal" ref={credentialModalRef} onCancel={closeCredentialModal}>
+        <div className="section-heading">
+          <h2 id="composer-title">
+            {editingId === null ? "Guardar un acceso" : "Actualizar acceso"}
+          </h2>
+          <button className="modal-close-button" type="button" onClick={closeCredentialModal} aria-label="Cerrar modal">
+            ×
+          </button>
+        </div>
           <form className="credential-form" onSubmit={handleCredentialSubmit}>
             <label htmlFor="credential-title">Nombre</label>
             <input
@@ -1504,38 +1033,159 @@ function App() {
                 setCredential({ ...credential, totpSecret: event.target.value })
               }
             />
-            <fieldset className="url-fields">
-              <legend>URLs <span>Opcional</span></legend>
-              {credential.urls.map((url, index) => (
-                <div className="url-row" key={`credential-url-${index}`}>
-                  <input
-                    id={`credential-url-${index}`}
-                    maxLength={FIELD_LIMITS.url}
-                    type="url"
-                    autoComplete="off"
-                    placeholder="https://"
-                    value={url}
-                    onChange={(event) => updateCredentialUrl(index, event.target.value)}
-                  />
-                  <button className="secondary-button" type="button" onClick={() => removeCredentialUrl(index)} disabled={credential.urls.length === 1}>
-                    Quitar
-                  </button>
-                </div>
-              ))}
-              {credential.urls.length < FIELD_LIMITS.maxUrls && (
-                <button className="secondary-button add-url-button" type="button" onClick={addCredentialUrl}>
-                  Añadir URL
-                </button>
-              )}
-            </fieldset>
-            <div className="form-actions">
-              <button className="primary-button" type="submit" disabled={busy}>
-                {editingId === null ? "Guardar acceso" : "Guardar cambios"}
-              </button>
-              <button className="secondary-button" type="button" onClick={closeCredentialModal}>
-                Cancelar
-              </button>
-            </div>
+            {(() => {
+              const hasDangerousUrls = credential.urls.some((u) => {
+                if (!u || u.trim().length <= 3) return false;
+                return analyzeUrl(u.trim()).riskLevel === "danger";
+              });
+              return (
+                <>
+                  <fieldset className="url-fields">
+                    <legend>URLs <span>Opcional</span></legend>
+                    {credential.urls.map((url, index) => {
+                      const report = url && url.trim().length > 3 ? analyzeUrl(url.trim()) : null;
+                      return (
+                        <div key={`credential-url-${index}`} className="credential-url-item">
+                          <div className="url-row">
+                            <div className="url-input-wrapper">
+                              <input
+                                id={`credential-url-${index}`}
+                                maxLength={FIELD_LIMITS.url}
+                                type="url"
+                                autoComplete="off"
+                                placeholder="https://"
+                                value={url}
+                                onChange={(event) => updateCredentialUrl(index, event.target.value)}
+                                className={
+                                  report?.riskLevel === "danger"
+                                    ? "input-phishing-danger"
+                                    : report?.riskLevel === "warning"
+                                    ? "input-phishing-warning"
+                                    : report?.riskLevel === "safe"
+                                    ? "input-phishing-safe"
+                                    : ""
+                                }
+                              />
+                              {report && (
+                                <span className={`url-status-icon ${report.riskLevel}`} title={report.threatTitle}>
+                                  {report.riskLevel === "danger" ? (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                  ) : report.riskLevel === "warning" ? (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                  ) : (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              onClick={() => clearOrRemoveCredentialUrl(index)}
+                              title="Limpiar o quitar enlace"
+                            >
+                              {credential.urls.length > 1 ? "Quitar" : "Limpiar"}
+                            </button>
+                          </div>
+
+                          {/* Alerta minimalista de remediación */}
+                          {report && report.riskLevel === "danger" && (
+                            <div className="url-minimal-alert" role="alert">
+                              <div className="url-minimal-header">
+                                <span className="url-minimal-icon">
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#991b1b" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                </span>
+                                <div className="url-minimal-titles">
+                                  <strong className="url-minimal-title">
+                                    {report.typosquatTarget
+                                      ? `Posible imitación de ${report.typosquatTarget}`
+                                      : report.threatTitle}
+                                  </strong>
+                                  <p className="url-minimal-desc">
+                                    {report.threatDescription || "Esta dirección parece fraudulenta o está incompleta. Por seguridad, no permitimos guardar sitios maliciosos."}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="url-minimal-actions">
+                                {report.typosquatTarget && (
+                                  <button
+                                    type="button"
+                                    className="btn-minimal-fix"
+                                    onClick={() => fixCredentialUrlWithTarget(index, report.typosquatTarget!)}
+                                  >
+                                    Cambiar a https://{report.typosquatTarget}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn-minimal-remove"
+                                  onClick={() => clearOrRemoveCredentialUrl(index)}
+                                >
+                                  Eliminar enlace
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {report && report.riskLevel === "warning" && (
+                            <div className="url-feedback-warning">
+                              <span>Enlace HTTP sin cifrar: Vulnerable a intercepción de red.</span>
+                              <button
+                                type="button"
+                                className="remediation-btn-upgrade-https"
+                                onClick={() => {
+                                  if (url.startsWith("http://")) {
+                                    updateCredentialUrl(index, url.replace(/^http:\/\//, "https://"));
+                                  }
+                                }}
+                              >
+                                Cambiar a HTTPS
+                              </button>
+                            </div>
+                          )}
+
+                          {report && report.riskLevel === "safe" && (
+                            <div className="url-feedback-safe">
+                              {report.isOfficialVerified ? (
+                                <span><strong>Servicio oficial verificado ({report.hostname}):</strong> Cifrado TLS activo y aprobado por catálogo.</span>
+                              ) : (
+                                <span><strong>Conexión HTTPS válida:</strong> Formato FQDN correcto con cifrado TLS activo (Dominio personalizado).</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {credential.urls.length < FIELD_LIMITS.maxUrls && (
+                      <button className="secondary-button add-url-button" type="button" onClick={addCredentialUrl}>
+                        Añadir URL
+                      </button>
+                    )}
+                  </fieldset>
+
+                  {error && (
+                    <div className="modal-error-alert" role="alert">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="form-actions">
+                    <button
+                      className={`primary-button ${hasDangerousUrls ? "btn-danger-blocked" : ""}`}
+                      type="submit"
+                      disabled={busy || hasDangerousUrls}
+                    >
+                      {hasDangerousUrls
+                        ? "Bloqueado: Corrige o elimina la URL fraudulenta"
+                        : (editingId === null ? "Guardar acceso" : "Guardar cambios")}
+                    </button>
+                    <button className="secondary-button" type="button" onClick={closeCredentialModal}>
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </form>
         </dialog>
       {message && (
@@ -1576,7 +1226,6 @@ function App() {
           </div>
         </div>
       </dialog>
-      </>)}
       <div className="toast-container" aria-live="polite">
         {toasts.map((t) => (
           <div className={`toast toast--${t.type}${t.exiting ? " toast--exit" : ""}`} key={t.id}>
@@ -1586,7 +1235,7 @@ function App() {
           </div>
         ))}
       </div>
-    </main>
+    </VaultShell>
   );
 }
 

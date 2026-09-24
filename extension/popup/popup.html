@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arca Shield</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="popup-header">
+      <div class="popup-brand">
+        <span class="shield-logo">🛡️</span>
+        <div>
+          <h1>Arca Shield</h1>
+          <span class="version-tag">Anti-Phishing & Autofill Guard</span>
+        </div>
+      </div>
+      <div id="status-pill" class="status-pill status-pill--checking">Analizando...</div>
+    </header>
+
+    <main class="popup-body">
+      <section class="site-card">
+        <span class="section-label">Sitio Web Activo</span>
+        <div id="site-domain" class="site-domain">Cargando dominio...</div>
+        <div id="site-protocol" class="site-protocol"></div>
+      </section>
+
+      <section id="threat-section" class="threat-section hidden">
+        <div class="threat-header">
+          <span id="threat-icon">🚨</span>
+          <h2 id="threat-title">Alerta de Seguridad</h2>
+        </div>
+        <p id="threat-desc" class="threat-desc"></p>
+        <div class="autofill-status">
+          <span class="badge-blocked">🔒 Autocompletado Bloqueado</span>
+        </div>
+      </section>
+
+      <section id="safe-section" class="safe-section hidden">
+        <div class="safe-badge">✓ Verificación Exitosa</div>
+        <p class="safe-desc">El sitio web utiliza conexión cifrada HTTPS y no presenta coincidencias con dominios de phishing o typosquatting.</p>
+      </section>
+    </main>
+
+    <footer class="popup-footer">
+      <button id="open-vault-btn" class="btn-primary">
+        🔑 Abrir Bóveda Arca
+      </button>
+      <div class="security-meta">
+        <span>Arquitectura Zero-Knowledge</span>
+      </div>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
