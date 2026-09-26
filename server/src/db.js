@@ -1,19 +1,16 @@
-// Capa unica de acceso a PostgreSQL y de inicializacion del esquema del servidor.
+// Capa unica de acceso a PostgreSQL (Supabase) e inicializacion del esquema del servidor.
+// El proyecto usa exclusivamente Supabase: no existe ningun almacenamiento local de respaldo.
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { Pool } = require('pg');
 
-const isLocalDb =
-  process.env.USE_LOCAL_DB === 'true' ||
-  !process.env.DATABASE_URL ||
-  process.env.DATABASE_URL.includes('TU_PROJECT_REF') ||
-  process.env.DATABASE_URL.includes('YOUR_PROJECT_REF');
-
-if (isLocalDb) {
-  module.exports = require('./local-db');
-} else {
-  const databaseUrl = process.env.DATABASE_URL;
-
+// Se valida al cargar para fallar con un mensaje claro si la cadena de conexion
+// falta o sigue siendo el placeholder de .env.example, en vez de intentar
+// conectarse a un host inexistente con un error poco entendible de pg.
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl || databaseUrl.includes('TU_PROJECT_REF') || databaseUrl.includes('YOUR_PROJECT_REF')) {
+  throw new Error('DATABASE_URL must point to the Supabase PostgreSQL database (see server/.env.example)');
+}
 
 const useSsl = process.env.DB_SSL !== 'false';
 const pool = new Pool({
@@ -56,5 +53,3 @@ module.exports = {
   closeDatabase,
   initializeDatabase,
 };
-}
-

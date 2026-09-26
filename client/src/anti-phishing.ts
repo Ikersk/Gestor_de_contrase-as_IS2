@@ -51,6 +51,7 @@ export const PROTECTED_BRANDS: ProtectedBrand[] = [
   { domain: 'github.com', stem: 'github', aliases: ['githb', 'githvb', 'g1thub'] },
   { domain: 'twitter.com', stem: 'twitter', aliases: ['twittr', 'twtr'] },
   { domain: 'x.com', stem: 'x', aliases: [] },
+  { domain: 'twitch.tv', stem: 'twitch', aliases: ['twich', 'twtch', 'twitchh'] },
   { domain: 'linkedin.com', stem: 'linkedin', aliases: ['linkdn', 'linked1n'] },
   { domain: 'dropbox.com', stem: 'dropbox', aliases: ['drpbox'] },
   { domain: 'spotify.com', stem: 'spotify', aliases: ['spotfy', 'sp0tify'] },
@@ -96,6 +97,62 @@ export const CONFUSABLE_CHARACTERS: Record<string, string> = {
   '\u03B1': 'a (Griego)',
 };
 
+// Umbral mínimo de similitud (1 - distancia/max) para considerar dos stems como la misma marca.
+// 0.70 atrapa typos reales (netfilx, g00gle, paypa1) pero descarta marcas distintas (twitch vs twitter).
+export const TYPO_SIMILARITY_THRESHOLD = 0.7;
+
+// Palabras señuelo típicas de phishing usadas junto a una marca (netflix-login, verify-paypal, etc.)
+export const PHISHING_LURE_KEYWORDS = new Set<string>([
+  'login',
+  'loggin',
+  'signin',
+  'sign',
+  'auth',
+  'secure',
+  'security',
+  'verify',
+  'verification',
+  'validate',
+  'validation',
+  'account',
+  'accounts',
+  'update',
+  'support',
+  'help',
+  'billing',
+  'wallet',
+  'confirm',
+  'password',
+  'passwd',
+  'reset',
+  'unlock',
+  'session',
+  'recovery',
+  'recover',
+  'restore',
+  'check',
+  'review',
+  'promo',
+  'reward',
+  'gift',
+  'download',
+  'portal',
+  'center',
+  'iniciar',
+  'sesion',
+  'verificar',
+  'validar',
+  'cuenta',
+  'soporte',
+  'ayuda',
+  'clave',
+  'contrasena',
+  'actualiza',
+  'seguridad',
+  'acceso',
+  'inicio',
+]);
+
 /**
  * Calcula la distancia de Levenshtein (número mínimo de operaciones de edición) entre dos cadenas.
  */
@@ -130,6 +187,52 @@ function normalizeVisualSubstitutions(domain: string): string {
     .replace(/1/g, 'l')
     .replace(/rn/g, 'm')
     .replace(/vv/g, 'w');
+}
+
+/**
+ * Calcula la similitud normalizada entre dos cadenas: 1 = idénticas, 0 = completamente distintas.
+ */
+export function calculateStringSimilarity(a: string, b: string): number {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - calculateLevenshteinDistance(a, b) / maxLen;
+}
+
+function splitStemSegments(stem: string): string[] {
+  return stem.split(/[-_.]+/).filter(Boolean);
+}
+
+/**
+ * Determina si un stem imita a una marca: alias conocidos o similitud >= umbral (normalizada o cruda).
+ */
+function isFuzzyBrandMatch(candidate: string, brand: ProtectedBrand): boolean {
+  if (brand.aliases.includes(candidate)) return true;
+  const normCandidate = normalizeVisualSubstitutions(candidate);
+  const normStem = normalizeVisualSubstitutions(brand.stem);
+  return (
+    calculateStringSimilarity(normCandidate, normStem) >= TYPO_SIMILARITY_THRESHOLD ||
+    calculateStringSimilarity(candidate, brand.stem) >= TYPO_SIMILARITY_THRESHOLD
+  );
+}
+
+/**
+ * Determina si un stem es una marca compuesta con palabras señuelo (netflix-login, verify-paypal).
+ * Solo acepta la marca como segmento completo o pegada a palabras señuelo, nunca cualquier
+ * dominio que contenga letras de la marca (dropbox.com no es imitación de x.com).
+ */
+function isCompoundBrandMatch(userStem: string, officialStem: string): boolean {
+  if (userStem === officialStem) return false;
+
+  const segments = splitStemSegments(userStem);
+  if (segments.length > 1 && segments.includes(officialStem)) return true;
+
+  if (!userStem.startsWith(officialStem) && !userStem.endsWith(officialStem)) return false;
+
+  const residual = userStem.startsWith(officialStem)
+    ? userStem.slice(officialStem.length)
+    : userStem.slice(0, userStem.length - officialStem.length);
+  const lureParts = splitStemSegments(residual);
+  return lureParts.length > 0 && lureParts.every((part) => PHISHING_LURE_KEYWORDS.has(part));
 }
 
 /**
@@ -230,11 +333,10 @@ export function analyzeUrl(rawUrl: string): UrlSecurityReport {
   if (!isFqdn) {
     // Verificar si el término de etiqueta única coincide o intenta imitar a una marca conocida (ej. "nexfl" -> "netflix.com")
     for (const brand of PROTECTED_BRANDS) {
-      const isAlias = brand.aliases.includes(hostname);
-      const dist = calculateLevenshteinDistance(hostname, brand.stem);
-      const isPrefix = hostname.length >= 4 && brand.stem.startsWith(hostname.slice(0, 3));
+      const isSimilar = isFuzzyBrandMatch(hostname, brand);
+      const isPrefix = hostname.length >= 4 && brand.stem.startsWith(hostname.slice(0, 5));
 
-      if (isAlias || dist <= 3 || isPrefix) {
+      if (isSimilar || isPrefix) {
         return {
           url: rawUrl,
           hostname,
@@ -312,10 +414,9 @@ export function analyzeUrl(rawUrl: string): UrlSecurityReport {
   const userStem = baseDomain.split('.')[0];
   const userTld = baseDomain.split('.').slice(1).join('.');
 
+  // Fase 1: verificar primero si el hostname pertenece a un servicio oficial del catálogo.
   for (const brand of PROTECTED_BRANDS) {
     const officialBase = extractBaseDomain(brand.domain);
-    const officialStem = brand.stem;
-    const officialTld = officialBase.split('.').slice(1).join('.');
 
     // A. Es el dominio oficial legítimo (ej. netflix.com, www.netflix.com, accounts.google.com)
     if (baseDomain === officialBase || hostname === brand.domain || hostname.endsWith('.' + brand.domain)) {
@@ -352,6 +453,13 @@ export function analyzeUrl(rawUrl: string): UrlSecurityReport {
         matchPolicyNote: `Arca Match: Dominio Base Oficial (${brand.domain})`,
       };
     }
+  }
+
+  // Fase 2: el dominio no es oficial, se evalúan las reglas de suplantación
+  for (const brand of PROTECTED_BRANDS) {
+    const officialBase = extractBaseDomain(brand.domain);
+    const officialStem = brand.stem;
+    const officialTld = officialBase.split('.').slice(1).join('.');
 
     // B. Suplantación de Extensión (TLD Spoofing)
     // Ej: netflix.xyz, netflix.top, paypal.cc
@@ -376,12 +484,7 @@ export function analyzeUrl(rawUrl: string): UrlSecurityReport {
 
     // C. Suplantación de Marca Compuesta (Compound Phishing)
     // Ej: netflix-login.com, netflix-billing.org, verify-paypal.com, google-support.com
-    if (
-      userStem !== officialStem &&
-      (userStem.includes(officialStem) ||
-        userStem.startsWith(officialStem + '-') ||
-        userStem.endsWith('-' + officialStem))
-    ) {
+    if (isCompoundBrandMatch(userStem, officialStem)) {
       return {
         url: rawUrl,
         hostname,
@@ -400,19 +503,11 @@ export function analyzeUrl(rawUrl: string): UrlSecurityReport {
       };
     }
 
-    // D. Alias conocidos o similitud de Levenshtein
-    const normUserStem = normalizeVisualSubstitutions(userStem);
-    const normOfficialStem = normalizeVisualSubstitutions(officialStem);
-    const dist = calculateLevenshteinDistance(normUserStem, normOfficialStem);
-    const rawDist = calculateLevenshteinDistance(userStem, officialStem);
-    const isAlias = brand.aliases.includes(userStem);
+    // D. Alias conocidos o similitud de Levenshtein (también por segmentos: netfilx-login.com)
+    const candidateStems = [userStem, ...splitStemSegments(userStem)];
+    const isFuzzyMatch = candidateStems.some((candidate) => isFuzzyBrandMatch(candidate, brand));
 
-    if (
-      isAlias ||
-      dist <= 2 ||
-      rawDist <= 2 ||
-      (officialStem.length >= 6 && dist <= 3 && normUserStem.startsWith(normOfficialStem.slice(0, 2)))
-    ) {
+    if (isFuzzyMatch) {
       return {
         url: rawUrl,
         hostname,

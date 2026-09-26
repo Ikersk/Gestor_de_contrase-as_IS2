@@ -28,7 +28,7 @@ A continuación se detalla el estado real de integración de cada mejora dentro 
 | **M5** | Protección Fuerza Bruta & Almacén Ciego ZK | Backend (`server/src/routes/auth.js`) | ✅ **Activo** | Rama `main` (commit `82e2f8e`) | Ya integrado y probado: Rate limiting (5 req/15min), fake salt HMAC, dummy hash timing protection y aislamiento por `user_id`. |
 | **M6** | Suite de Auditoría de Invariantes ZK & MitM | Tests (`zero-knowledge-audit.test.ts`) | ❌ **Pendiente** | Rama local `feature/zero-knowledge-security-enhancements` | Portar archivo de pruebas `client/src/crypto/zero-knowledge-audit.test.ts` (eleva de 44 a 49 tests frontend). |
 | **M7** | Escudo Anti-Phishing & Extensión Guard (1Password/Bitwarden) | Fullstack & Extensión (`anti-phishing.ts`, `extension/`) | ✅ **Activo** | `client/src/anti-phishing.ts`, `CredentialDetail.tsx`, `extension/` | Análisis homográfico, typosquatting Levenshtein, bloqueo de autocompletado y modal de advertencia roja. |
-| **M+** | Adaptador Base de Datos Local SQLite para Pruebas | Backend (`local-db.js` / `db.js`) | ✅ **Activo** | `server/src/local-db.js`, `server/src/db.js` | Switch `isLocalDb` activo en `server/src/db.js` permitiendo ejecución offline inmediata sin requerir Supabase. |
+| **M+** | Adaptador Base de Datos Local SQLite para Pruebas | Backend (`local-db.js` / `db.js`) | ❌ **Retirado** | `server/src/db.js` (adaptador eliminado) | El adaptador SQLite (`local-db.js`) y el switch `isLocalDb` se retiraron: el proyecto usa exclusivamente Supabase y `db.js` valida `DATABASE_URL` al cargar. |
 
 ---
 
@@ -193,7 +193,7 @@ Se creó el archivo de pruebas automatizadas [`client/src/crypto/zero-knowledge-
 Se implementó un sistema de defensa multicapa contra ataques de ingeniería social y suplantación de identidad:
 1. **Motor de Análisis Criptográfico de URLs (`anti-phishing.ts`):**
    - **Detección Homográfica (Punycode / Confusables):** Detecta dominios con prefijo internacional `xn--` o que inyectan caracteres de alfabetos cirílicos o griegos que imitan visualmente a caracteres latinos (ejemplo: `pаypal.com` donde la `а` es el punto de código cirílico `\u0430`).
-   - **Detección Algorítmica de Typosquatting:** Compara la distancia de edición Levenshtein y normaliza sustituciones visuales (`0` por `o`, `1` por `l`, `rn` por `m`, `vv` por `w`) contra un catálogo de servicios oficiales de alto impacto (PayPal, Google, Microsoft, Apple, Amazon, GitHub, Netflix, bancos internacionales). Si la distancia es $\le 2$, se cataloga inmediatamente como suplantación crítica.
+   - **Detección Algorítmica de Typosquatting:** Primero valida si el dominio pertenece al catálogo oficial de servicios de alto impacto (PayPal, Google, Microsoft, Apple, Amazon, GitHub, Netflix, Twitch, bancos internacionales). Solo si no es oficial, compara la similitud normalizada (1 − Levenshtein/máx. longitud) tras normalizar sustituciones visuales (`0` por `o`, `1` por `l`, `rn` por `m`, `vv` por `w`): si la similitud es $\ge 0.70$, hay alias conocido o la marca va pegada a una palabra señuelo (`netflix-login`, `verify-paypal`), se cataloga como suplantación crítica. El umbral por similitud descarta falsos positivos de marcas distintas con letras parecidas (ej. `twitch.tv` no es imitación de `twitter.com`).
    - **Evaluación de Transporte Seguro:** Identifica enlaces que no utilicen HTTPS y alerta sobre el riesgo de ataques *Man-in-the-Middle* en redes abiertas.
 2. **Escudo de Navegación Segura en la Bóveda (`CredentialDetail.tsx`):**
    - Cada enlace en las credenciales muestra un badge dinámico (`🛡️ Seguro`, `⚠️ HTTP Inseguro`, `🚨 Posible Phishing`).
@@ -220,7 +220,7 @@ Se implementó un sistema de defensa multicapa contra ataques de ingeniería soc
 | **Protección contra Fuerza Bruta** | Sin limitadores estrictos. | **Rate limiting independiente, fake salt HMAC y dummy compare**. | Evita ataques de fuerza bruta y enumeración de usuarios. | ✅ Activo |
 | **Auditoría Automatizada** | Tests funcionales de endpoints. | **Suite dedicada de invariantes Zero-Knowledge y pruebas MitM**. | Certificación continua de cumplimiento de especificación. | ❌ Pendiente |
 | **Protección Anti-Phishing** | Sin inspección de dominios; apertura directa de cualquier enlace. | **Escudo criptográfico homográfico/typosquatting + Extensión de bloqueo de autocompletado**. | Previene robo de credenciales en páginas clonadas o falsas. | ✅ Activo |
-| **Persistencia Local para Tests** | Dependencia obligatoria de Supabase externo. | **Adaptador local SQLite transparente (`USE_LOCAL_DB=true`)**. | Permite desarrollo y pruebas 100% offline sin infraestructura externa. | ✅ Activo |
+| **Persistencia Local para Tests** | Dependencia obligatoria de Supabase externo. | **Adaptador local SQLite transparente (`USE_LOCAL_DB=true`)**. | ~~Permite desarrollo y pruebas 100% offline sin infraestructura externa.~~ Retirado: se decidió usar solo la BD de Supabase. | ❌ Retirado |
 
 ---
 

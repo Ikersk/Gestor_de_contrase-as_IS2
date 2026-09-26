@@ -196,6 +196,35 @@ Vault Key = AES-GCM-Decrypt(Encryption Key, wrapIv, wrappedVaultKey)
 
 Si la contrasena es incorrecta, la autenticacion falla o AES-GCM no puede validar el blob. La Vault Key recuperada se guarda solo en la variable de memoria `vaultKey`.
 
+### Inicio de sesion con MFA (TOTP)
+
+Si la cuenta tiene MFA activado, el Paso 3 no devuelve la Vault Key: responde `200 {mfaRequired: true}` y emite una cookie temporal `mfa` (httpOnly, SameSite=Strict, 5 minutos) que solo autoriza a completar la verificacion.
+
+```mermaid
+flowchart TD
+    L[POST /login con authHash] --> M{mfa_enabled?}
+    M -- no --> K[Cookie session + wrappedVaultKey]
+    M -- si --> R[200 mfaRequired + cookie mfa]
+    R --> V[POST /mfa/verify con codigo TOTP o backup code]
+    V --> OK[Cookie session + wrappedVaultKey]
+    V --> KO[401 Invalid verification code]
+```
+
+Flujo de verificacion:
+
+1. El cliente envia `POST /api/auth/mfa/verify` con la cookie `mfa` y un codigo de 6 digitos de la app autenticadora (ventana de +/-1 periodo de 30 segundos) o un codigo de respaldo.
+2. El servidor compara en tiempo constante y aplica anti-replay: el time-step usado se guarda en `mfa_last_counter` y no puede volverse a usar.
+3. Con el codigo correcto se borra la cookie `mfa`, se firma la cookie de sesion normal y se devuelve `wrappedVaultKey` (y `usedBackupCode: true` si se uso un codigo de respaldo).
+4. Los 10 codigos de respaldo se generan al activar, se guardan hasheados con bcrypt (cost 12), se muestran una sola vez y cada uno sirve una sola vez.
+
+Activacion y desactivacion, desde "Mi cuenta" con la sesion ya iniciada:
+
+- `POST /mfa/setup` genera el secreto TOTP (32 bytes, Base32), lo guarda cifrado con AES-GCM usando `TOTP_ENC_KEY` y devuelve el `otpauth://` para pintar el QR.
+- `POST /mfa/enable` exige un codigo valido, guarda los 10 codigos de respaldo hasheados e incrementa `session_version` (revoca el resto de sesiones sin matar la actual).
+- `POST /mfa/disable` exige un codigo TOTP o de respaldo, borra el secreto y los codigos de respaldo, e incrementa `session_version`.
+
+Limitacion: a diferencia del TOTP por credencial (que vive cifrado dentro de la propia boveda), el secreto TOTP de la cuenta esta cifrado con una clave del servidor (`TOTP_ENC_KEY`). El servidor puede descifrarlo porque el algoritmo exige conocerlo para verificar. Por eso el MFA de cuenta protege frente a robos de contrasena, no frente a un servidor malicioso.
+
 ## 5. Guardar una credencial
 
 El usuario introduce:
@@ -454,8 +483,8 @@ Sistema de notificaciones efímeras (3 segundos) que aparecen en la esquina infe
 |---|---|---|
 | Formulario del navegador | Contrasena maestra y credencial mientras se editan | Nada fuera de la memoria de la pagina |
 | Cliente criptografico | Master Key, Encryption Key, Auth Hash y Vault Key durante la sesion | Persistencia de esas claves en Web Storage |
-| Red | Email, salt, iteraciones, Auth Hash, blobs Base64, cookie de sesion, primeros 5 chars SHA-1 (HIBP) | Contrasena maestra, Vault Key sin cifrar, credenciales legibles, hash completo SHA-1 |
-| Servidor | Email, Auth Hash recibido, hashes bcrypt, blobs, IVs, JWT y metadatos | Contrasena maestra, Master Key, Encryption Key, JSON de credenciales, hash SHA-1 |
+| Red | Email, salt, iteraciones, Auth Hash, blobs Base64, cookie de sesion, cookie `mfa` intermedia, codigos TOTP o de respaldo tecleados, primeros 5 chars SHA-1 (HIBP) | Contrasena maestra, Vault Key sin cifrar, credenciales legibles, hash completo SHA-1 |
+| Servidor | Email, Auth Hash recibido, hashes bcrypt, blobs, IVs, JWT y metadatos, secreto TOTP de cuenta cifrado con `TOTP_ENC_KEY` (se descifra para verificar) | Contrasena maestra, Master Key, Encryption Key, JSON de credenciales, hash SHA-1 |
 | Supabase | Hash bcrypt, salt, iteraciones, `wrapped_vault_key`, `wrap_iv`, IVs y ciphertexts | Credenciales legibles y claves sin envolver |
 
 ## 14. Comprobacion manual
@@ -465,11 +494,14 @@ Para revisar el almacenamiento, abre el SQL Editor de Supabase y ejecuta:
 ```sql
 SELECT * FROM users;
 SELECT * FROM vault_items;
+SELECT * FROM mfa_backup_codes;
 ```
 
 Los campos `auth_hash_hashed`, `wrapped_vault_key`, `wrap_iv`, `iv` y `ciphertext` deben aparecer como hashes o cadenas Base64. No deben contener directamente titulos, usuarios, contrasenas o URLs legibles.
 
-Para revisar la red, abre DevTools, entra en **Network** y observa las peticiones de registro, login y `/api/vault`. Comprueba que los cuerpos contienen solo material derivado o cifrado.
+En `users`, `mfa_secret` es un blob cifrado con AES-GCM (no Base32 legible) y `mfa_backup_codes` solo contiene hashes bcrypt; nunca los codigos de respaldo en texto plano.
+
+Para revisar la red, abre DevTools, entra en **Network** y observa las peticiones de registro, login y `/api/vault`. Comprueba que los cuerpos contienen solo material derivado o cifrado. En un login con MFA activo, la respuesta de `/api/auth/login` no debe contener `wrappedVaultKey` hasta que `/api/auth/mfa/verify` acepte el codigo.
 
 ## 15. Limitacion importante
 

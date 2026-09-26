@@ -14,6 +14,7 @@ const POPULAR_TARGETS = [
   'netflix.com',
   'twitter.com',
   'x.com',
+  'twitch.tv',
   'linkedin.com',
   'dropbox.com',
   'spotify.com',
@@ -87,6 +88,76 @@ function normalizeSubstitutions(domain) {
     .replace(/vv/g, 'w');
 }
 
+const TYPO_SIMILARITY_THRESHOLD = 0.7;
+
+const BRAND_ALIASES = {
+  'netflix.com': ['nexfl', 'netfl', 'netflx', 'neflix', 'nexflix', 'netlfix', 'nexf'],
+  'paypal.com': ['payp', 'paypa1', 'paypol', 'paypall'],
+  'google.com': ['g00g', 'g00gle', 'googl', 'gogle', 'googel'],
+  'microsoft.com': ['msft', 'micros0ft', 'microsof'],
+  'apple.com': ['aple', 'appIe', 'appl'],
+  'amazon.com': ['amzn', 'amazn', 'amaz0n'],
+  'facebook.com': ['faceb00k', 'facebok', 'fb'],
+  'instagram.com': ['instagrm', 'instagr0m', 'insta'],
+  'github.com': ['githb', 'githvb', 'g1thub'],
+  'twitter.com': ['twittr', 'twtr'],
+  'twitch.tv': ['twich', 'twtch', 'twitchh'],
+  'linkedin.com': ['linkdn', 'linked1n'],
+  'dropbox.com': ['drpbox'],
+  'spotify.com': ['spotfy', 'sp0tify'],
+  'binance.com': ['binanc', 'binanxe'],
+  'coinbase.com': ['coinbse', 'c0inbase'],
+  'bankofamerica.com': ['bofa'],
+  'chase.com': ['chas'],
+  'wellsfargo.com': ['wellfargo'],
+  'santander.com': ['santandr'],
+  'mercadolibre.com': ['mercadolib'],
+};
+
+const PHISHING_LURE_KEYWORDS = new Set([
+  'login', 'loggin', 'signin', 'sign', 'auth', 'secure', 'security', 'verify', 'verification',
+  'validate', 'validation', 'account', 'accounts', 'update', 'support', 'help', 'billing',
+  'wallet', 'confirm', 'password', 'passwd', 'reset', 'unlock', 'session', 'recovery',
+  'recover', 'restore', 'check', 'review', 'promo', 'reward', 'gift', 'download', 'portal',
+  'center', 'iniciar', 'sesion', 'verificar', 'validar', 'cuenta', 'soporte', 'ayuda',
+  'clave', 'contrasena', 'actualiza', 'seguridad', 'acceso', 'inicio',
+]);
+
+function calculateSimilarity(a, b) {
+  const maxLen = Math.max(a.length, b.length);
+  if (maxLen === 0) return 1;
+  return 1 - calculateLevenshtein(a, b) / maxLen;
+}
+
+function splitStemSegments(stem) {
+  return stem.split(/[-_.]+/).filter(Boolean);
+}
+
+function isFuzzyBrandMatch(candidate, targetStem, aliases) {
+  if (aliases && aliases.includes(candidate)) return true;
+  const normCandidate = normalizeSubstitutions(candidate);
+  const normStem = normalizeSubstitutions(targetStem);
+  return (
+    calculateSimilarity(normCandidate, normStem) >= TYPO_SIMILARITY_THRESHOLD ||
+    calculateSimilarity(candidate, targetStem) >= TYPO_SIMILARITY_THRESHOLD
+  );
+}
+
+function isCompoundBrandMatch(userStem, targetStem) {
+  if (userStem === targetStem) return false;
+
+  const segments = splitStemSegments(userStem);
+  if (segments.length > 1 && segments.includes(targetStem)) return true;
+
+  if (!userStem.startsWith(targetStem) && !userStem.endsWith(targetStem)) return false;
+
+  const residual = userStem.startsWith(targetStem)
+    ? userStem.slice(targetStem.length)
+    : userStem.slice(0, userStem.length - targetStem.length);
+  const lureParts = splitStemSegments(residual);
+  return lureParts.length > 0 && lureParts.every((part) => PHISHING_LURE_KEYWORDS.has(part));
+}
+
 function isValidFqdn(hostname) {
   const clean = (hostname || '').toLowerCase().trim().replace(/:\d+$/, '');
   if (!clean) return false;
@@ -152,56 +223,70 @@ function evaluateUrlSecurity(rawUrl) {
   const userStem = baseDomain.split('.')[0];
   const userTld = baseDomain.split('.').slice(1).join('.');
 
-  for (const target of POPULAR_TARGETS) {
-    const targetBase = extractBaseDomain(target);
-    const targetStem = targetBase.split('.')[0];
-    const targetTld = targetBase.split('.').slice(1).join('.');
+  // Fase 1: dominio oficial del catálogo (siempre tiene prioridad sobre las reglas de amenaza)
+  const officialTarget = POPULAR_TARGETS.find((target) => extractBaseDomain(target) === baseDomain);
 
-    if (baseDomain === targetBase) continue;
-
-    // TLD Spoofing
-    if (userStem === targetStem && userTld !== targetTld) {
+  if (officialTarget) {
+    if (isSecureProtocol) {
       return {
-        riskLevel: 'danger',
-        title: 'Extensión No Autorizada (TLD Spoofing)',
-        description: `El dominio "${baseDomain}" intenta suplantar el servicio oficial "${target}" con una extensión no autorizada (.${userTld}).`,
+        riskLevel: 'safe',
+        title: `Servicio Oficial Verificado (${officialTarget})`,
+        description: 'Dominio oficial verificado con cifrado TLS activo.',
         hostname,
         baseDomain,
-        target,
-        isSecure: isSecureProtocol,
+        target: officialTarget,
+        isSecure: true,
       };
     }
+  } else {
+    // Fase 2: dominio no oficial -> Typosquatting, Compound Phishing y TLD Spoofing
+    for (const target of POPULAR_TARGETS) {
+      const targetBase = extractBaseDomain(target);
+      const targetStem = targetBase.split('.')[0];
+      const targetTld = targetBase.split('.').slice(1).join('.');
 
-    // Compound Phishing
-    if (
-      userStem !== targetStem &&
-      (userStem.includes(targetStem) || userStem.startsWith(targetStem + '-') || userStem.endsWith('-' + targetStem))
-    ) {
-      return {
-        riskLevel: 'danger',
-        title: 'Suplantación de Marca (Compound Phishing)',
-        description: `El dominio "${baseDomain}" imita la marca oficial "${target}" con palabras clave engañosas.`,
-        hostname,
-        baseDomain,
-        target,
-        isSecure: isSecureProtocol,
-      };
-    }
+      // TLD Spoofing
+      if (userStem === targetStem && userTld !== targetTld) {
+        return {
+          riskLevel: 'danger',
+          title: 'Extensión No Autorizada (TLD Spoofing)',
+          description: `El dominio "${baseDomain}" intenta suplantar el servicio oficial "${target}" con una extensión no autorizada (.${userTld}).`,
+          hostname,
+          baseDomain,
+          target,
+          isSecure: isSecureProtocol,
+        };
+      }
 
-    // Levenshtein & visual substitutions
-    const dist = calculateLevenshtein(userStem, targetStem);
-    const normDist = calculateLevenshtein(normalizeSubstitutions(userStem), normalizeSubstitutions(targetStem));
+      // Compound Phishing
+      if (isCompoundBrandMatch(userStem, targetStem)) {
+        return {
+          riskLevel: 'danger',
+          title: 'Suplantación de Marca (Compound Phishing)',
+          description: `El dominio "${baseDomain}" imita la marca oficial "${target}" con palabras clave engañosas.`,
+          hostname,
+          baseDomain,
+          target,
+          isSecure: isSecureProtocol,
+        };
+      }
 
-    if (dist <= 2 || normDist <= 2 || (targetStem.length >= 6 && dist <= 3 && userStem.startsWith(targetStem.slice(0, 2)))) {
-      return {
-        riskLevel: 'danger',
-        title: 'Posible Typosquatting / Suplantación',
-        description: `El dominio "${baseDomain}" es similar al servicio oficial "${target}". Podría ser un clon de phishing.`,
-        hostname,
-        baseDomain,
-        target,
-        isSecure: isSecureProtocol,
-      };
+      // Levenshtein & visual substitutions
+      const aliases = BRAND_ALIASES[target] || [];
+      const candidateStems = [userStem, ...splitStemSegments(userStem)];
+      const isFuzzyMatch = candidateStems.some((candidate) => isFuzzyBrandMatch(candidate, targetStem, aliases));
+
+      if (isFuzzyMatch) {
+        return {
+          riskLevel: 'danger',
+          title: 'Posible Typosquatting / Suplantación',
+          description: `El dominio "${baseDomain}" es similar al servicio oficial "${target}". Podría ser un clon de phishing.`,
+          hostname,
+          baseDomain,
+          target,
+          isSecure: isSecureProtocol,
+        };
+      }
     }
   }
 

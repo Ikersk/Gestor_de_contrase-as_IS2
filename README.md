@@ -72,7 +72,8 @@ Vite mostrará la URL local del cliente (normalmente `http://localhost:5173`). E
 - **Vault Key** de 256 bits generada una vez en el registro, nunca almacenada en texto plano.
 - **bcryptjs** (cost 12) para hashing del authHash en servidor.
 - **JWT** HS256 en cookie httpOnly, Secure, SameSite=Strict (8 horas).
-- **Rate limiting** (5 intentos/15min) en login, cambio de contraseña y eliminación de cuenta.
+- **Rate limiting** (5 intentos/15min) en login, cambio de contraseña, eliminación de cuenta y endpoints MFA.
+- **MFA (TOTP, RFC 6238)**: segundo factor opcional solo para iniciar sesión. El secreto se guarda cifrado con AES-GCM (`TOTP_ENC_KEY`), con anti-replay por time-step, ventana ±1 periodo y 10 códigos de respaldo bcrypt de un solo uso.
 - **CSP** estricta via Helmet (sin unsafe-inline/eval).
 - **CORS** restringido a FRONTEND_ORIGIN.
 - **Vectores NIST** verificados byte a byte para PBKDF2 y AES-GCM.
@@ -82,6 +83,7 @@ Vite mostrará la URL local del cliente (normalmente `http://localhost:5173`). E
 - **Bóveda de credenciales**: crear, editar, eliminar credenciales cifradas con split-pane layout (lista + detalle).
 - **Generador de contraseñas**: aleatoriedad criptográfica (`crypto.getRandomValues`) con rejection sampling.
 - **TOTP/2FA**: generación de códigos TOTP para credenciales que lo requieran.
+- **MFA de cuenta**: activación desde *Mi Cuenta* con QR o clave manual, código de respaldo en el login y desactivación con verificación.
 - **Detección de brechas (HIBP)**: verificación automática de contraseñas comprometidas usando k-Anonymity. Se ejecuta al desbloquear la bóveda.
 - **Security Dashboard**: métricas de salud, credenciales, alertas y brechas HIBP.
 - **Cambio de contraseña maestra**: re-derivación de claves y re-envoltura de la Vault Key sin modificar ciphertexts existentes.
@@ -132,6 +134,12 @@ En `users` deben aparecer hashes bcrypt, salt, iteraciones, `wrapped_vault_key` 
 ### Auditoría de tráfico
 
 Abre DevTools → **Network** y usa la aplicación. En las peticiones de registro, login y vault deben aparecer únicamente material derivado, IVs y blobs Base64; nunca la contraseña maestra, la Vault Key ni los campos legibles de una credencial.
+
+## Limitaciones conocidas
+
+- **El servidor entrega el JavaScript que ejecuta el cifrado.** Si esa versión fuese sustituida por una maliciosa antes de llegar al navegador, podría capturar datos antes de cifrarlos. La CSP, el SRI, la revisión del código y una cadena de despliegue confiable reducen el riesgo pero no lo eliminan (ver FLUJO.md, sección 15).
+- **El secreto TOTP del MFA de cuenta está bajo la clave del servidor.** Se almacena cifrado con AES-GCM usando `TOTP_ENC_KEY` porque el servidor necesita descifrarlo para verificar los códigos. El MFA protege frente a contraseñas robadas o reutilizadas, no frente a un servidor malicioso.
+- **El MFA solo se pide al iniciar sesión.** Cambiar la contraseña maestra o eliminar la cuenta no exigen el segundo factor, solo la contraseña maestra y una sesión ya autenticada.
 
 ## Documentación adicional
 

@@ -10,12 +10,35 @@ export interface LoginResponse {
   wrapIv: string;
 }
 
+/** Respuesta del login cuando la cuenta exige un segundo factor: sin vault key. */
+export interface MfaRequiredResponse {
+  mfaRequired: true;
+}
+
+/** Resultado de POST /auth/mfa/verify: la vault key solo llega tras el codigo. */
+export interface MfaVerifyResponse {
+  wrappedVaultKey: string;
+  wrapIv: string;
+  usedBackupCode?: boolean;
+}
+
 export interface VaultItemResponse {
   id: number | string;
   iv: string;
   ciphertext: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Error HTTP que conserva el codigo de estado para que la interfaz ramifique (p.ej. MFA). */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
 }
 
 // Permite cambiar el origen de la API en despliegues y usa el proxy de Vite por defecto.
@@ -40,7 +63,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     } catch {
       // Conserva el mensaje generico si el servidor no devolvio JSON.
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   // Algunos 201 no llevan cuerpo (registro), pero crear un item devuelve JSON con su id.
@@ -68,9 +91,45 @@ export function registerAccount(payload: {
   });
 }
 
-/** Inicia sesion y devuelve la Vault Key envuelta para desenvolverla en memoria. */
+/** Inicia sesion; con MFA activo devuelve solo el reto `mfaRequired`, jamas la vault key. */
 export function loginAccount(payload: { email: string; authHash: string }) {
-  return request<LoginResponse>('/auth/login', {
+  return request<LoginResponse | MfaRequiredResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Completa el login con el codigo TOTP o de respaldo y devuelve la Vault Key envuelta. */
+export function verifyMfaLogin(payload: { code: string }) {
+  return request<MfaVerifyResponse>('/auth/mfa/verify', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Indica si la cuenta activa tiene el segundo factor habilitado. */
+export function getMfaStatus() {
+  return request<{ enabled: boolean }>('/auth/mfa/status');
+}
+
+/** Genera un secreto TOTP pendiente y devuelve el secreto y el URI para el QR. */
+export function setupMfa() {
+  return request<{ secret: string; otpauthUri: string }>('/auth/mfa/setup', {
+    method: 'POST',
+  });
+}
+
+/** Activa el MFA con un codigo de confirmacion y devuelve los codigos de respaldo. */
+export function enableMfa(payload: { code: string }) {
+  return request<{ backupCodes: string[] }>('/auth/mfa/enable', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Desactiva el MFA exigiendo un codigo TOTP o de respaldo valido. */
+export function disableMfa(payload: { code: string }) {
+  return request<void>('/auth/mfa/disable', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
