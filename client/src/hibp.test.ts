@@ -12,6 +12,7 @@ function credential(id: number, password: string, title = `Acceso ${id}`): Decry
 describe("hibp", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe("sha1Hash", () => {

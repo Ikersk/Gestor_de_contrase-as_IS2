@@ -22,6 +22,20 @@ import { validateEmail, validateMasterPassword } from './validation';
 let vaultKey: Uint8Array | null = null;
 let activeKdfSalt: Uint8Array | null = null;
 let activeKdfIterations: number | null = null;
+let activeRawEncryptionKey: Uint8Array | null = null;
+let activeAuthHash: string | null = null;
+let activeWrappedVaultKey: string | null = null;
+let activeWrapIv: string | null = null;
+
+function clearActiveKeys() {
+  vaultKey = null;
+  activeKdfSalt = null;
+  activeKdfIterations = null;
+  activeRawEncryptionKey = null;
+  activeAuthHash = null;
+  activeWrappedVaultKey = null;
+  activeWrapIv = null;
+}
 
 /** Devuelve la Vault Key activa solo para que las siguientes fases cifren items en memoria. */
 export function getVaultKey() {
@@ -61,6 +75,11 @@ export async function loginWithMasterPassword(email: string, masterPassword: str
   vaultKey = null;
   activeKdfSalt = null;
   activeKdfIterations = null;
+  activeRawEncryptionKey = null;
+  activeAuthHash = null;
+  activeWrappedVaultKey = null;
+  activeWrapIv = null;
+
   const { kdfSalt, kdfIterations } = await getAuthSalt(email);
   const salt = base64ToBytes(kdfSalt);
   const masterKey = await deriveMasterKey(
@@ -68,11 +87,15 @@ export async function loginWithMasterPassword(email: string, masterPassword: str
     salt,
     kdfIterations,
   );
-  const { encryptionKey, authHash } = await deriveSubkeys(masterKey);
+  const { encryptionKey, rawEncryptionKey, authHash } = await deriveSubkeys(masterKey);
   const session = await loginAccount({ email, authHash });
   vaultKey = await unwrapVaultKey(encryptionKey, session.wrapIv, session.wrappedVaultKey);
   activeKdfSalt = salt;
   activeKdfIterations = kdfIterations;
+  activeRawEncryptionKey = rawEncryptionKey;
+  activeAuthHash = authHash;
+  activeWrappedVaultKey = session.wrappedVaultKey;
+  activeWrapIv = session.wrapIv;
 }
 
 /** Rota el material de autenticacion y vuelve a envolver la Vault Key existente. */
@@ -113,9 +136,7 @@ export async function changeMasterPassword(currentPassword: string, newPassword:
     wrapIv: wrapped.wrapIv,
   });
 
-  vaultKey = null;
-  activeKdfSalt = null;
-  activeKdfIterations = null;
+  clearActiveKeys();
 }
 
 /** Cierra la sesion remota y elimina la referencia local a la Vault Key. */
@@ -123,9 +144,7 @@ export async function logoutFromMemory() {
   try {
     await logoutAccount();
   } finally {
-    vaultKey = null;
-    activeKdfSalt = null;
-    activeKdfIterations = null;
+    clearActiveKeys();
   }
 }
 
@@ -141,8 +160,6 @@ export async function deleteAccountFromPassword(currentPassword: string) {
   try {
     await deleteAccount({ authHash });
   } finally {
-    vaultKey = null;
-    activeKdfSalt = null;
-    activeKdfIterations = null;
+    clearActiveKeys();
   }
 }

@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Arca Shield — Anti-Phishing & Autofill Guard",
-  "version": "1.0.0",
-  "description": "Protección en tiempo real contra phishing, verificación de dominio oficial y bloqueo de autocompletado.",
+  "version": "1.0.1",
+  "description": "Protección en tiempo real contra phishing, verificación de dominio oficial y autocompletado Zero-Knowledge de credenciales.",
   "permissions": [
     "tabs",
     "activeTab",
     "storage",
-    "webNavigation"
+    "webNavigation",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -28,7 +29,8 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content_script.js"],
-      "run_at": "document_idle"
+      "run_at": "document_end",
+      "all_frames": true
     }
   ],
   "icons": {

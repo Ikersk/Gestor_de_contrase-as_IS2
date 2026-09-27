@@ -10,7 +10,11 @@
   <div class="popup-container">
     <header class="popup-header">
       <div class="popup-brand">
-        <span class="shield-logo">🛡️</span>
+        <span class="shield-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </span>
         <div>
           <h1>Arca Shield</h1>
           <span class="version-tag">Anti-Phishing & Autofill Guard</span>
@@ -28,24 +32,64 @@
 
       <section id="threat-section" class="threat-section hidden">
         <div class="threat-header">
-          <span id="threat-icon">🚨</span>
+          <span id="threat-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </span>
           <h2 id="threat-title">Alerta de Seguridad</h2>
         </div>
         <p id="threat-desc" class="threat-desc"></p>
         <div class="autofill-status">
-          <span class="badge-blocked">🔒 Autocompletado Bloqueado</span>
+          <span class="badge-blocked">Autocompletado Bloqueado</span>
         </div>
       </section>
 
       <section id="safe-section" class="safe-section hidden">
-        <div class="safe-badge">✓ Verificación Exitosa</div>
+        <div class="safe-badge">Dominio Verificado</div>
         <p class="safe-desc">El sitio web utiliza conexión cifrada HTTPS y no presenta coincidencias con dominios de phishing o typosquatting.</p>
       </section>
+
+      <!-- Estado: Bóveda cerrada o no sincronizada -->
+      <section id="vault-locked-section" class="vault-locked-section hidden">
+        <div class="locked-icon-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <div class="locked-title">Bóveda no conectada o bloqueada</div>
+        <p class="locked-desc">
+          Inicia sesión en tu Bóveda Arca para activar el autocompletado en esta página.
+        </p>
+        <button id="btn-unlock-popup" class="btn-unlock-popup" type="button">
+          Abrir e Iniciar Sesión en Arca
+        </button>
+      </section>
+
+      <!-- Sección de credenciales coincidentes para este dominio -->
+      <section id="autofill-section" class="autofill-section hidden">
+        <span class="section-label">Credencial sugerida para este sitio</span>
+        <div id="autofill-list" class="autofill-list"></div>
+      </section>
+
+      <!-- Sección de búsqueda en la bóveda -->
+      <section id="vault-browse-section" class="vault-browse-section hidden">
+        <span class="section-label" id="vault-browse-label">Buscar en tu Bóveda Arca</span>
+        <div class="popup-search-box">
+          <input type="text" id="popup-search-input" class="popup-search-input" placeholder="Buscar cuenta o servicio..." />
+        </div>
+        <div id="popup-vault-list" class="popup-vault-list"></div>
+      </section>
+
+      <div id="autofill-toast" class="autofill-toast hidden">Campos completados con éxito</div>
     </main>
 
     <footer class="popup-footer">
-      <button id="open-vault-btn" class="btn-primary">
-        🔑 Abrir Bóveda Arca
+      <button id="open-vault-btn" class="btn-primary" type="button">
+        Abrir Bóveda Arca
       </button>
       <div class="security-meta">
         <span>Arquitectura Zero-Knowledge</span>

@@ -48,6 +48,89 @@ export function validateMasterPassword(value: string) {
   return null;
 }
 
+export interface PasswordProtocolResult {
+  hasLower: boolean;
+  hasUpper: boolean;
+  hasNumber: boolean;
+  hasSpecial: boolean;
+  hasMinLength: boolean;
+  entropy: number;
+  score: number;
+  level: 'muy-debil' | 'debil' | 'media' | 'fuerte' | 'excelente';
+  levelLabel: string;
+  isValid: boolean;
+  errors: string[];
+}
+
+/** Evalúa en tiempo real si una contraseña cumple con el protocolo de seguridad y calcula su entropía en bits. */
+export function evaluatePasswordProtocol(password: string, minLength = 8): PasswordProtocolResult {
+  const hasLower = /[a-z]/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  const hasMinLength = password.length >= minLength;
+
+  let poolSize = 0;
+  if (hasLower) poolSize += 26;
+  if (hasUpper) poolSize += 26;
+  if (hasNumber) poolSize += 10;
+  if (hasSpecial) poolSize += 33;
+
+  const entropy = password.length > 0 && poolSize > 0 
+    ? Math.round(password.length * Math.log2(poolSize)) 
+    : 0;
+
+  const criteria = [hasLower, hasUpper, hasNumber, hasSpecial, hasMinLength];
+  const passedCount = criteria.filter(Boolean).length;
+  const score = Math.min(100, Math.round((passedCount / 5) * 60 + Math.min(40, (entropy / 80) * 40)));
+
+  let level: PasswordProtocolResult['level'] = 'muy-debil';
+  let levelLabel = 'Muy Débil';
+  if (score >= 85 && passedCount === 5) {
+    level = 'excelente';
+    levelLabel = 'Excelente';
+  } else if (score >= 70 && passedCount >= 4) {
+    level = 'fuerte';
+    levelLabel = 'Fuerte';
+  } else if (score >= 50 && passedCount >= 3) {
+    level = 'media';
+    levelLabel = 'Media';
+  } else if (score >= 25) {
+    level = 'debil';
+    levelLabel = 'Débil';
+  }
+
+  const errors: string[] = [];
+  if (!hasMinLength) errors.push(`Mínimo ${minLength} caracteres`);
+  if (!hasLower) errors.push('Al menos una letra minúscula (a-z)');
+  if (!hasUpper) errors.push('Al menos una letra mayúscula (A-Z)');
+  if (!hasNumber) errors.push('Al menos un número (0-9)');
+  if (!hasSpecial) errors.push('Al menos un carácter especial (!@#$%...)');
+
+  return {
+    hasLower,
+    hasUpper,
+    hasNumber,
+    hasSpecial,
+    hasMinLength,
+    entropy,
+    score,
+    level,
+    levelLabel,
+    isValid: passedCount === 5,
+    errors,
+  };
+}
+
+export function validateSecurePassword(value: string, minLength = 8, label = 'La contraseña') {
+  if (!value) return `${label} es obligatoria`;
+  const result = evaluatePasswordProtocol(value, minLength);
+  if (!result.isValid && result.errors.length > 0) {
+    return `${label} debe cumplir el protocolo de seguridad: ${result.errors[0]}`;
+  }
+  return null;
+}
+
 /** Valida los campos legibles de una credencial antes de cifrarlos y guardarlos. */
 export function validateCredential(credential: ValidatableCredential) {
   const checks = [
