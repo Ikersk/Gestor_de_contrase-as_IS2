@@ -124,6 +124,7 @@ sequenceDiagram
 * **Protección contra enumeración de usuarios**: Si alguien ingresa un correo que no está registrado, el servidor genera un *salt falso determinista*. El tiempo de respuesta es idéntico, impidiendo que un atacante descubra si una cuenta existe o no.
 * **Verificación Ciega**: El servidor compara el hash recibido contra el hash almacenado en base de datos. En ningún momento viajó la contraseña.
 * **Desempaque en RAM**: La `Vault Key` se descifra en la memoria volátil del navegador y se destruye inmediatamente al cerrar sesión.
+* **Verificación en dos pasos (MFA)**: Si la cuenta tiene MFA activo, el login **no** devuelve la `Wrapped Vault Key`: responde `200 {mfaRequired:true}` con una cookie intermedia `mfa` (httpOnly, 5 minutos). El código TOTP o de respaldo se envía a `POST /api/auth/mfa/verify` y solo entonces llega la `Wrapped Vault Key` con la cookie de sesión definitiva (ver FLUJO.md, sección 4).
 
 ---
 
@@ -209,7 +210,7 @@ flowchart TD
     
     PSL --> Exact{¿Coincidencia con Catálogo Oficial?}
     Exact -- Sí + HTTPS --> SafeOfficial[Oficial Verificado: TLS Activo]
-    Exact -- No --> TypoCheck{¿Distancia Levenshtein <= 2 o subdominio falso?}
+    Exact -- No --> TypoCheck{¿Similitud >= 0.70, alias o marca con palabra señuelo?}
     TypoCheck -- Sí --> AlertTypo[Alerta: Posible imitación de [Servicio]]
     TypoCheck -- No --> CustomDomain[Dominio Personalizado Válido]
 ```
@@ -243,9 +244,9 @@ El backend actúa como un custodio seguro que implementa defensas en profundidad
   * `Content-Security-Policy`: Solo permite scripts y estilos autorizados con hashes SRI (*Subresource Integrity*).
   * `X-Frame-Options: DENY`: Evita ataques de *clickjacking*.
   * `httpOnly`, `SameSite=Strict`: Cookies inmunes al robo mediante scripts maliciosos (XSS).
-* **Compatibilidad de Persistencia Dual**:
-  * **PostgreSQL (Supabase)** para despliegues en producción y alta disponibilidad.
-  * **SQLite Local Autónomo (`node:sqlite`)** para desarrollo y pruebas locales sin necesidad de configurar servicios externos.
+* **Persistencia Única en Supabase (PostgreSQL)**:
+  * El servidor usa exclusivamente PostgreSQL alojado en Supabase; `server/src/db.js` valida `DATABASE_URL` al cargar y falla con un mensaje claro si falta o sigue siendo el placeholder.
+  * Las migraciones SQL idempotentes (`server/sql/001…003`) se aplican automáticamente al arrancar o con `npm run db:migrate`. No existe ningún almacenamiento local de respaldo.
 
 ---
 

@@ -12,12 +12,14 @@
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "otpauth": "^9.5.2",
+    "qrcode": "^1.5.4",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "latest",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "tailwindcss": "^4.3.3",

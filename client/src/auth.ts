@@ -16,25 +16,32 @@ import {
   loginAccount,
   logoutAccount,
   registerAccount,
+  verifyMfaLogin,
 } from './api';
 import { validateEmail, validateMasterPassword } from './validation';
 
 let vaultKey: Uint8Array | null = null;
 let activeKdfSalt: Uint8Array | null = null;
 let activeKdfIterations: number | null = null;
-let activeRawEncryptionKey: Uint8Array | null = null;
-let activeAuthHash: string | null = null;
-let activeWrappedVaultKey: string | null = null;
-let activeWrapIv: string | null = null;
+
+// Material derivado retenido entre el primer paso del login (contraseña correcta)
+// y la verificación del segundo factor. Vive solo en memoria, igual que vaultKey.
+let pendingEncryptionKey: CryptoKey | null = null;
+let pendingSalt: Uint8Array | null = null;
+let pendingIterations: number | null = null;
+
+/** Descarta el reto MFA pendiente (al empezar otro login o al cerrar sesión). */
+function clearPendingMfa() {
+  pendingEncryptionKey = null;
+  pendingSalt = null;
+  pendingIterations = null;
+}
 
 function clearActiveKeys() {
   vaultKey = null;
   activeKdfSalt = null;
   activeKdfIterations = null;
-  activeRawEncryptionKey = null;
-  activeAuthHash = null;
-  activeWrappedVaultKey = null;
-  activeWrapIv = null;
+  clearPendingMfa();
 }
 
 /** Devuelve la Vault Key activa solo para que las siguientes fases cifren items en memoria. */
@@ -65,7 +72,7 @@ export async function registerWithMasterPassword(email: string, masterPassword: 
   });
 }
 
-/** Deriva el Auth Hash, inicia sesion y desenvuelve la Vault Key solo en memoria. */
+/** Deriva el Auth Hash e inicia sesión; devuelve 'mfa-required' si falta el segundo factor. */
 export async function loginWithMasterPassword(email: string, masterPassword: string) {
   const emailError = validateEmail(email);
   const passwordError = validateMasterPassword(masterPassword);
@@ -75,10 +82,7 @@ export async function loginWithMasterPassword(email: string, masterPassword: str
   vaultKey = null;
   activeKdfSalt = null;
   activeKdfIterations = null;
-  activeRawEncryptionKey = null;
-  activeAuthHash = null;
-  activeWrappedVaultKey = null;
-  activeWrapIv = null;
+  clearPendingMfa();
 
   const { kdfSalt, kdfIterations } = await getAuthSalt(email);
   const salt = base64ToBytes(kdfSalt);
@@ -87,15 +91,39 @@ export async function loginWithMasterPassword(email: string, masterPassword: str
     salt,
     kdfIterations,
   );
-  const { encryptionKey, rawEncryptionKey, authHash } = await deriveSubkeys(masterKey);
+  const { encryptionKey, authHash } = await deriveSubkeys(masterKey);
   const session = await loginAccount({ email, authHash });
+
+  if ('mfaRequired' in session) {
+    // Sin MFA el servidor no devuelve el blob de la vault key: se conserva solo
+    // el material derivado para desenvolverla cuando llegue el código TOTP.
+    pendingEncryptionKey = encryptionKey;
+    pendingSalt = salt;
+    pendingIterations = kdfIterations;
+    return 'mfa-required' as const;
+  }
+
   vaultKey = await unwrapVaultKey(encryptionKey, session.wrapIv, session.wrappedVaultKey);
   activeKdfSalt = salt;
   activeKdfIterations = kdfIterations;
-  activeRawEncryptionKey = rawEncryptionKey;
-  activeAuthHash = authHash;
-  activeWrappedVaultKey = session.wrappedVaultKey;
-  activeWrapIv = session.wrapIv;
+  return 'ok' as const;
+}
+
+/**
+ * Completa el login tras el código TOTP o de respaldo y desenvuelve la Vault Key.
+ * Un código incorrecto no destruye el reto: permite reintentar hasta que la
+ * cookie intermedia `mfa` caduque en el servidor.
+ */
+export async function completeMfaLogin(code: string) {
+  if (!pendingEncryptionKey || !pendingSalt || pendingIterations === null) {
+    throw new Error('El reto de verificación ya no está disponible. Inicia sesión de nuevo.');
+  }
+
+  const session = await verifyMfaLogin({ code });
+  vaultKey = await unwrapVaultKey(pendingEncryptionKey, session.wrapIv, session.wrappedVaultKey);
+  activeKdfSalt = pendingSalt;
+  activeKdfIterations = pendingIterations;
+  clearPendingMfa();
 }
 
 /** Rota el material de autenticacion y vuelve a envolver la Vault Key existente. */

@@ -6,6 +6,7 @@ import {
   validateEmail,
   validateMasterPassword,
   validateSecurePassword,
+  validateMfaCode,
 } from './validation';
 
 // Las pruebas cubren los límites que también debe respetar el formulario visible.
@@ -84,5 +85,21 @@ describe('form validation limits', () => {
     expect(validateCredential({ ...valid, totpSecret: 'JBSW Y3DP EHPK 3PXP' })).toBeNull();
     expect(validateCredential({ ...valid, totpSecret: 'otpauth://totp/Arca:demo?secret=JBSWY3DPEHPK3PXP' })).toBeNull();
     expect(validateCredential({ ...valid, totpSecret: 'not-valid' })).toBeTruthy();
+  });
+});
+
+// El campo MFA acepta tanto el código TOTP del authenticator como un backup code.
+describe('MFA code validation', () => {
+  it('accepts 6-digit TOTP codes and formatted backup codes only', () => {
+    expect(validateMfaCode('')).toBeTruthy();
+    expect(validateMfaCode('12345')).toBeTruthy();
+    expect(validateMfaCode('abcdef')).toBeTruthy();
+    expect(validateMfaCode('123456')).toBeNull();
+    expect(validateMfaCode('1234567')).toBeTruthy();
+    expect(validateMfaCode('abcdefgh')).toBeNull();
+    expect(validateMfaCode('ABCD-EFGH')).toBeNull();
+    expect(validateMfaCode('abcd-efgh')).toBeNull();
+    expect(validateMfaCode('ABC2-7FGH')).toBeNull();
+    expect(validateMfaCode('ABCD-EFG')).toBeTruthy();
   });
 });

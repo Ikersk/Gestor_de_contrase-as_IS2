@@ -2,6 +2,7 @@ import { FormEvent, StrictMode, useCallback, useEffect, useMemo, useRef, useStat
 import { createRoot } from "react-dom/client";
 import {
   changeMasterPassword,
+  completeMfaLogin,
   deleteAccountFromPassword,
   loginWithMasterPassword,
   logoutFromMemory,
@@ -35,6 +36,8 @@ import { auditVault } from "./vault-health";
 import type { VaultHealthAlert } from "./vault-health";
 import { checkCredentialsBreach } from "./hibp";
 import { VaultShell } from "./vault/VaultShell";
+import { MfaChallenge } from "./MfaChallenge";
+import { MfaSettings } from "./MfaSettings";
 
 type View = "login" | "register";
 type Toast = { id: number; message: string; type: "success" | "error"; exiting?: boolean };
@@ -302,6 +305,8 @@ function AccountModal({
           </button>
         </form>
       </div>
+
+      <MfaSettings />
 
       <div className="account-section danger-zone">
         <h3 className="danger-zone-title">Zona de Peligro</h3>
@@ -620,6 +625,7 @@ function App() {
   const [email, setEmail] = useState("");
   const [masterPassword, setMasterPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
   const [credentials, setCredentials] = useState<
     Array<Credential & { id: number | string }>
@@ -647,6 +653,14 @@ function App() {
   const [showConfirmMasterPassword, setShowConfirmMasterPassword] = useState(false);
   const [showCredentialPassword, setShowCredentialPassword] = useState(false);
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
+
+  /** Marca la sesión como abierta y carga los blobs de la bóveda para descifrarlos. */
+  async function unlockVault() {
+    setAuthenticated(true);
+    setDecrypting(true);
+    setCredentials(await listCredentials());
+    setDecrypting(false);
+  }
 
   /** Registra una cuenta o inicia sesión y carga las credenciales tras desbloquear la bóveda. */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -687,11 +701,14 @@ function App() {
         setIsCaptchaVerified(false);
         setMessage("Cuenta creada. Inicia sesión para abrir tu bóveda.");
       } else {
-        await loginWithMasterPassword(email, masterPassword);
-        setAuthenticated(true);
-        setDecrypting(true);
-        setCredentials(await listCredentials());
-        setDecrypting(false);
+        const outcome = await loginWithMasterPassword(email, masterPassword);
+        if (outcome === "mfa-required") {
+          // La bóveda sigue cerrada: solo se muestra el reto del segundo factor.
+          setMfaChallenge(true);
+          setMessage("");
+        } else {
+          await unlockVault();
+        }
       }
       setMasterPassword("");
       setConfirmMasterPassword("");
@@ -709,6 +726,30 @@ function App() {
     }
   }
 
+  /** Verifica el código TOTP o de respaldo y, si es válido, desenvuelve la bóveda. */
+  async function handleMfaVerify(code: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await completeMfaLogin(code);
+      await unlockVault();
+    } catch (verifyError) {
+      setError(
+        verifyError instanceof Error
+          ? verifyError.message
+          : "No se pudo verificar el código",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Vuelve al formulario de contraseña; el reto pendiente se reutiliza si se reintenta. */
+  function handleMfaBack() {
+    setMfaChallenge(false);
+    setError("");
+    setMessage("");
+  }
   /** Cierra la sesión remota y limpia todo el estado sensible de la interfaz. */
   async function handleLogout() {
     setBusy(true);
@@ -1028,34 +1069,44 @@ function App() {
             </header>
           </div>
           <div className="auth-page">
-            <AuthPanel
-              view={view}
-              setView={(nextView) => {
-                setView(nextView);
-                setError("");
-                setMessage("");
-                setConfirmMasterPassword("");
-                setShowMasterPassword(false);
-                setShowConfirmMasterPassword(false);
-                setIsCaptchaVerified(false);
-              }}
-              email={email}
-              setEmail={setEmail}
-              masterPassword={masterPassword}
-              setMasterPassword={setMasterPassword}
-              confirmMasterPassword={confirmMasterPassword}
-              setConfirmMasterPassword={setConfirmMasterPassword}
-              showMasterPassword={showMasterPassword}
-              setShowMasterPassword={setShowMasterPassword}
-              showConfirmMasterPassword={showConfirmMasterPassword}
-              setShowConfirmMasterPassword={setShowConfirmMasterPassword}
-              busy={busy}
-              message={message}
-              error={error}
-              onSubmit={handleSubmit}
-              isCaptchaVerified={isCaptchaVerified}
-              setIsCaptchaVerified={setIsCaptchaVerified}
-            />
+            {mfaChallenge ? (
+              <MfaChallenge
+                email={email}
+                busy={busy}
+                error={error}
+                onVerify={handleMfaVerify}
+                onBack={handleMfaBack}
+              />
+            ) : (
+              <AuthPanel
+                view={view}
+                setView={(nextView) => {
+                  setView(nextView);
+                  setError("");
+                  setMessage("");
+                  setConfirmMasterPassword("");
+                  setShowMasterPassword(false);
+                  setShowConfirmMasterPassword(false);
+                  setIsCaptchaVerified(false);
+                }}
+                email={email}
+                setEmail={setEmail}
+                masterPassword={masterPassword}
+                setMasterPassword={setMasterPassword}
+                confirmMasterPassword={confirmMasterPassword}
+                setConfirmMasterPassword={setConfirmMasterPassword}
+                showMasterPassword={showMasterPassword}
+                setShowMasterPassword={setShowMasterPassword}
+                showConfirmMasterPassword={showConfirmMasterPassword}
+                setShowConfirmMasterPassword={setShowConfirmMasterPassword}
+                busy={busy}
+                message={message}
+                error={error}
+                onSubmit={handleSubmit}
+                isCaptchaVerified={isCaptchaVerified}
+                setIsCaptchaVerified={setIsCaptchaVerified}
+              />
+            )}
           </div>
         </div>
       </main>

@@ -131,6 +131,15 @@ export function validateSecurePassword(value: string, minLength = 8, label = 'La
   return null;
 }
 
+/** Valida un código MFA: TOTP de 6 dígitos o código de respaldo (XXXX-XXXX u 8 caracteres). */
+export function validateMfaCode(value: string) {
+  const code = value.trim();
+  if (!code) return 'El código de verificación es obligatorio';
+  if (/^\d{6}$/.test(code)) return null;
+  if (/^[A-Za-z0-9]{8}$/.test(code) || /^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/.test(code)) return null;
+  return 'Introduce un código de 6 dígitos o un código de respaldo';
+}
+
 /** Valida los campos legibles de una credencial antes de cifrarlos y guardarlos. */
 export function validateCredential(credential: ValidatableCredential) {
   const checks = [

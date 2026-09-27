@@ -64,6 +64,13 @@ const vaultItemSchema = z.object({
   ciphertext: base64String({ minBytes: 16, maxBytes: MAX_CIPHERTEXT_BYTES }),
 });
 
+// Acepta tanto un codigo TOTP de 6 digitos como un codigo de respaldo (8-16
+// caracteres alfanumericos opcionales con guiones); el formato exacto se
+// comprueba en la ruta porque la respuesta depende de que rama casque.
+const mfaCodeSchema = z.object({
+  code: z.string().trim().min(6).max(32),
+});
+
 /** Valida un cuerpo sin propagar detalles internos de Zod a la respuesta HTTP. */
 function parsePayload(schema, body) {
   const result = schema.safeParse(body);
@@ -77,4 +84,5 @@ module.exports = {
   changeMasterPasswordSchema,
   deleteAccountSchema,
   vaultItemSchema,
+  mfaCodeSchema,
 };
