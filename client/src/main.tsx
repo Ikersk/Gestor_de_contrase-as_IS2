@@ -654,6 +654,50 @@ function App() {
   const [showCredentialPassword, setShowCredentialPassword] = useState(false);
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
 
+  function addToast(msg: string, type: Toast["type"] = "success") {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, message: msg, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
+    }, 2750);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }
+
+  const healthReport = useMemo(() => auditVault(credentials, breachedAlerts), [credentials, breachedAlerts]);
+  const affectedIds = useMemo(() => {
+    const ids = new Set<number | string>();
+    for (const alert of healthReport.reused) ids.add(alert.id);
+    for (const alert of healthReport.weak) ids.add(alert.id);
+    for (const alert of healthReport.breached) ids.add(alert.id);
+    return ids;
+  }, [healthReport]);
+  const breachedIds = useMemo(() => {
+    const ids = new Set<number | string>();
+    for (const alert of healthReport.breached) ids.add(alert.id);
+    return ids;
+  }, [healthReport]);
+
+  async function handleCheckBreach() {
+    setIsCheckingBreach(true);
+    setBreachError(null);
+    try {
+      const alerts = await checkCredentialsBreach(credentials);
+      setBreachedAlerts(alerts);
+    } catch {
+      setBreachError("No se pudo conectar con Have I Been Pwned. Inténtalo de nuevo.");
+    } finally {
+      setIsCheckingBreach(false);
+    }
+  }
+
+  useEffect(() => {
+    if (authenticated && !decrypting && credentials.length > 0 && breachedAlerts.length === 0 && !isCheckingBreach) {
+      handleCheckBreach();
+    }
+  }, [authenticated, decrypting, credentials.length]);
+
   /** Marca la sesión como abierta y carga los blobs de la bóveda para descifrarlos. */
   async function unlockVault() {
     setAuthenticated(true);
