@@ -1,5 +1,53 @@
 // Arca Shield Background Service Worker (Manifest V3)
 
+// La bóveda sincronizada nunca se escribe en disco: se guarda en
+// chrome.storage.session (solo RAM) y se expone a los content scripts.
+try {
+  const sessionArea = chrome.storage && chrome.storage.session;
+  if (sessionArea && typeof sessionArea.setAccessLevel === 'function') {
+    const access = sessionArea.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+    if (access && typeof access.catch === 'function') access.catch(() => {});
+  }
+} catch {}
+
+/**
+ * Área de almacenamiento de la bóveda sincronizada.
+ * Prioriza storage.session (memoria volátil, exigencia Zero-Knowledge) y solo
+ * cae a storage.local en navegadores que no lo implementan.
+ */
+function vaultStorageArea() {
+  try {
+    if (chrome.storage && chrome.storage.session) return chrome.storage.session;
+  } catch {}
+  return chrome.storage.local;
+}
+
+/** true cuando la URL corresponde a la aplicación de la bóveda Arca. */
+function isVaultUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return (
+      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+      parsed.port === '5173'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Interruptor global de autocompletado (preferencia booleana del usuario).
+ * No es un secreto: no forma parte de la bóveda Zero-Knowledge.
+ */
+async function isAutofillEnabled() {
+  try {
+    const data = await chrome.storage.local.get({ autofill_enabled: true });
+    return data?.autofill_enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 const POPULAR_TARGETS = [
   'paypal.com',
   'google.com',
@@ -332,6 +380,14 @@ async function analyzeAndProtectTab(tabId, url) {
     chrome.action.setBadgeText({ text: 'HTTP', tabId });
     chrome.action.setBadgeBackgroundColor({ color: '#f59e0b', tabId });
   } else if (assessment.riskLevel === 'safe') {
+    // Los avisos de phishing y HTTP tienen prioridad absoluta; solo esta rama
+    // (sitio seguro) cede el badge al estado del interruptor de autocompletado.
+    if (!(await isAutofillEnabled())) {
+      chrome.action.setBadgeText({ text: 'OFF', tabId });
+      chrome.action.setBadgeBackgroundColor({ color: '#64748b', tabId });
+      return;
+    }
+
     // Si hay credenciales guardadas para este sitio, mostrar cantidad como 1Password / Bitwarden
     const matches = await findMatchingCredentialsForUrl(url);
     if (matches.length > 0) {
@@ -346,20 +402,28 @@ async function analyzeAndProtectTab(tabId, url) {
   }
 }
 
+// Pestañas que alojan la aplicación de la bóveda: al cerrarse se purga la copia
+// que la extensión mantenga en memoria (además del borrado por logout/pagehide).
+const vaultTabIds = new Set();
+
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (tab.url && isVaultUrl(tab.url)) vaultTabIds.add(tabId);
+  else vaultTabIds.delete(tabId);
+
   if (changeInfo.status === 'complete' && tab.url) {
     analyzeAndProtectTab(tabId, tab.url);
 
-    if (tab.url.includes('localhost:5173') || tab.url.includes('127.0.0.1:5173')) {
+    if (isVaultUrl(tab.url)) {
       try {
         if (chrome.scripting) {
           const results = await chrome.scripting.executeScript({
             target: { tabId },
+            world: 'MAIN',
             func: () => window.__ARCA_VAULT_ITEMS__ || null,
           });
           const items = results?.[0]?.result;
           if (Array.isArray(items) && items.length > 0) {
-            await chrome.storage.local.set({ arca_vault_items: items });
+            await vaultStorageArea().set({ arca_vault_items: items });
           }
         }
       } catch {}
@@ -370,18 +434,22 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   const tab = await chrome.tabs.get(activeInfo.tabId);
   if (tab && tab.url) {
+    if (isVaultUrl(tab.url)) vaultTabIds.add(activeInfo.tabId);
+    else vaultTabIds.delete(activeInfo.tabId);
+
     analyzeAndProtectTab(activeInfo.tabId, tab.url);
 
-    if (tab.url.includes('localhost:5173') || tab.url.includes('127.0.0.1:5173')) {
+    if (isVaultUrl(tab.url)) {
       try {
         if (chrome.scripting) {
           const results = await chrome.scripting.executeScript({
             target: { tabId: activeInfo.tabId },
+            world: 'MAIN',
             func: () => window.__ARCA_VAULT_ITEMS__ || null,
           });
           const items = results?.[0]?.result;
           if (Array.isArray(items) && items.length > 0) {
-            await chrome.storage.local.set({ arca_vault_items: items });
+            await vaultStorageArea().set({ arca_vault_items: items });
           }
         }
       } catch {}
@@ -438,7 +506,7 @@ function extractDomainBrand(rawDomainOrUrl) {
  */
 async function getStoredVaultItems() {
   try {
-    const data = await chrome.storage.local.get('arca_vault_items');
+    const data = await vaultStorageArea().get('arca_vault_items');
     return Array.isArray(data.arca_vault_items) ? data.arca_vault_items : [];
   } catch {
     return [];
@@ -522,6 +590,12 @@ const tabLastFilled = new Map();
 
 chrome.tabs.onRemoved?.addListener((tabId) => {
   tabLastFilled.delete(tabId);
+
+  if (vaultTabIds.delete(tabId)) {
+    try {
+      vaultStorageArea().remove('arca_vault_items');
+    } catch {}
+  }
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -566,7 +640,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   if (request.action === 'SAVE_VAULT_ITEMS') {
     const items = Array.isArray(request.items) ? request.items : [];
-    chrome.storage.local.set({ arca_vault_items: items }, async () => {
+    vaultStorageArea().set({ arca_vault_items: items }, async () => {
       sendResponse({ success: true, count: items.length });
       // Actualizar insignia en la pestaña activa
       try {
@@ -580,7 +654,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'CLEAR_VAULT_ITEMS') {
-    chrome.storage.local.remove('arca_vault_items', () => {
+    vaultStorageArea().remove('arca_vault_items', () => {
       sendResponse({ success: true });
     });
     return true;
@@ -608,31 +682,57 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
 
-    const assessment = evaluateUrlSecurity(tabUrl);
-    // REGLA CRÍTICA DE CIBERSEGURIDAD: Si el sitio es sospechoso o de phishing, nunca entregar credenciales
-    if (assessment.riskLevel === 'danger' || assessment.riskLevel === 'warning') {
-      sendResponse({
-        matches: [],
-        blocked: true,
-        riskLevel: assessment.riskLevel,
-        threatTitle: assessment.title,
-      });
-      return true;
-    }
+    // Interruptor de autocompletado en OFF: no se entregan credenciales.
+    chrome.storage.local.get({ autofill_enabled: true }, (data) => {
+      if (data?.autofill_enabled === false) {
+        sendResponse({ matches: [], blocked: false, disabled: true });
+        return;
+      }
 
-    findMatchingCredentialsForUrl(tabUrl).then((matches) => {
-      sendResponse({
-        matches: matches.map((m) => ({
-          id: m.id,
-          title: m.title,
-          username: m.username,
-          password: m.password,
-        })),
-        blocked: false,
+      const assessment = evaluateUrlSecurity(tabUrl);
+      // REGLA CRÍTICA DE CIBERSEGURIDAD: Si el sitio es sospechoso o de phishing, nunca entregar credenciales
+      if (assessment.riskLevel === 'danger' || assessment.riskLevel === 'warning') {
+        sendResponse({
+          matches: [],
+          blocked: true,
+          riskLevel: assessment.riskLevel,
+          threatTitle: assessment.title,
+        });
+        return;
+      }
+
+      findMatchingCredentialsForUrl(tabUrl).then((matches) => {
+        sendResponse({
+          matches: matches.map((m) => ({
+            id: m.id,
+            title: m.title,
+            username: m.username,
+            password: m.password,
+          })),
+          blocked: false,
+        });
       });
     });
     return true;
   }
+});
+
+/** Repinta el badge de todas las pestañas abiertas. */
+async function refreshTabBadges() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab && tab.id != null && tab.url) {
+        await analyzeAndProtectTab(tab.id, tab.url);
+      }
+    }
+  } catch {}
+}
+
+// El interruptor de autocompletado cambia los badges (OFF / contador) al instante.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local' || !changes.autofill_enabled) return;
+  refreshTabBadges();
 });
 
 

@@ -59,7 +59,7 @@ graph TD
     subgraph "Servidor y Base de Datos"
         APIRequest --> Server[Servidor Express / Node.js]
         Server --> RateLimit[Control de Fuerza Bruta y Sesión]
-        RateLimit --> DB[(PostgreSQL / SQLite Local)]
+        RateLimit --> DB[(PostgreSQL en Supabase)]
     end
 ```
 
@@ -82,12 +82,12 @@ sequenceDiagram
     C->>C: HKDF deriva: Auth Key y Encryption Key
     C->>C: Genera Vault Key simétrica (AES-256-GCM)
     C->>C: Cifra Vault Key usando Encryption Key ➔ Wrapped Vault Key
-    C->>C: Calcula SHA-256 de Auth Key ➔ Auth Hash
+    C->>C: Auth Hash = Base64(Auth Key Material)
     C->>S: POST /api/auth/register (Email, Salt, Iteraciones, Auth Hash, Wrapped Vault Key, Wrap IV)
     Note over S: El servidor NUNCA recibe la Contraseña Maestra
     S->>S: Hashea el Auth Hash con bcrypt
     S->>DB: Guarda registro de usuario
-    S->>C: Responde 201 Created + Cookie httpOnly de sesión
+    S->>C: Responde 201 Created (sin cookie: la sesión la emite el login)
 ```
 
 1. **Entrada de datos**: El usuario proporciona su correo y su contraseña maestra.
@@ -110,7 +110,7 @@ sequenceDiagram
     participant S as Servidor (API)
 
     U->>C: Ingresa Email y Contraseña Maestra
-    C->>S: POST /api/auth/salt { email }
+    C->>S: GET /api/auth/salt?email=...
     Note over S: Si el email no existe, responde un Fake Salt determinista (Anti-Enumeration)
     S-->>C: Devuelve Salt e iteraciones de la cuenta
     C->>C: Calcula Master Key y Auth Hash localmente
@@ -132,7 +132,7 @@ sequenceDiagram
 
 Cada cuenta, servicio o contraseña añadida a Arca se almacena de forma aislada e independiente:
 
-1. **Estructuración en JSON**: La información (título, usuario, contraseña, notas, URLs, secreto TOTP, favorito) se serializa en UTF-8.
+1. **Estructuración en JSON**: La información (título, usuario, contraseña, URLs, secreto TOTP, favorito) se serializa en UTF-8.
 2. **Vector de Inicialización Único (IV)**: Para cada guardado o actualización se generan **12 bytes criptográficos aleatorios**. Dos credenciales con la misma contraseña generan textos cifrados totalmente distintos.
 3. **Cifrado Autenticado (AES-256-GCM)**: Proporciona **confidencialidad** (nadie puede leer los datos) e **integridad** (si alguien altera un solo bit en la base de datos, el algoritmo detecta la manipulación y rechaza descifrarlo).
 4. **Visualización Segura**: La contraseña permanece oculta tras asteriscos. Al pulsar el botón de revelado o copiado, se desencripta en memoria temporalmente sin tocar el almacenamiento local (*localStorage*).
@@ -165,6 +165,17 @@ flowchart LR
 * **Operación 100% Local**: La generación de códigos se realiza en el navegador mediante operaciones de bits y HMAC-SHA1.
 * **Sin Dependencias de Nube**: El secreto TOTP viaja cifrado dentro del blob de la credencial y solo se ejecuta en local, sin enviar peticiones a APIs externas.
 
+### MFA de cuenta (segundo factor al iniciar sesión)
+
+Distinto del TOTP por credencial, Arca permite activar un MFA de cuenta desde *Mi Cuenta*:
+
+1. `POST /api/auth/mfa/setup` genera un secreto TOTP de 20 bytes (160 bits), lo guarda **cifrado con AES-256-GCM usando `TOTP_ENC_KEY`** (clave del servidor, porque el servidor necesita descifrarlo para verificar) y devuelve el `otpauth://` para el QR.
+2. `POST /api/auth/mfa/enable` exige un código válido, genera **10 códigos de respaldo** (`XXXX-XXXX`, hasheados con bcrypt cost 12, de un solo uso) y incrementa `session_version`.
+3. Al hacer login con MFA activo, el servidor **no** entrega la `Wrapped Vault Key`: responde `{mfaRequired:true}` y una cookie intermedia `mfa` de 5 minutos. Solo `POST /api/auth/mfa/verify` devuelve la sesión definitiva y la `Wrapped Vault Key`.
+4. La verificación acepta ventana de ±1 periodo (30 s), aplica **anti-replay** (`mfa_last_counter` reclamado de forma atómica en la base de datos) y compara en tiempo constante.
+
+> Este MFA protege frente a contraseñas robadas o reutilizadas, no frente a un servidor malicioso: su secreto está bajo la clave del servidor.
+
 ---
 
 ## Proceso 6: Auditoría de Seguridad y Detección de Fugas (HIBP)
@@ -184,9 +195,9 @@ sequenceDiagram
     participant C as Cliente Arca
     participant HIBP as API HaveIBeenPwned
 
-    C->>C: Calcula SHA-1("contraseña123") ➔ CBFDAC6008F9CAB4083784CBD1874F76618D2A97
-    Note over C: Toma los primeros 5 caracteres: "CBFDA" (Prefijo)<br/>Conserva los 35 restantes: "C6008F9CAB4083784CBD1874F76618D2A97" (Sufijo)
-    C->>HIBP: GET /range/CBFDA
+    C->>C: Calcula SHA-1("contraseña123") ➔ 90C0A9862B6BD28EF7054DA13BB9C5F8FB3B7527
+    Note over C: Toma los primeros 5 caracteres: "90C0A" (Prefijo)<br/>Conserva los 35 restantes: "9862B6BD28EF7054DA13BB9C5F8FB3B7527" (Sufijo)
+    C->>HIBP: GET /range/90C0A
     Note over HIBP: Devuelve lista de ~500 sufijos que comparten ese prefijo
     HIBP-->>C: Lista de hashes con ocurrencias
     C->>C: Busca internamente si su sufijo coincide con alguno de la lista
@@ -226,7 +237,7 @@ flowchart TD
 
 ## Proceso 8: Extensión de Navegador Guard
 
-La extensión de Arca (disponible en la carpeta [`extension/`](file:///c:/Users/Alejandra/Desktop/Gestor_de_contrase-as_IS2/extension)) protege activamente la navegación del usuario en tiempo real:
+La extensión de Arca (*Arca Shield*, disponible en la carpeta [`extension/`](extension/)) protege activamente la navegación del usuario en tiempo real:
 
 1. **Inspección de Pestaña Activa**: El `content_script` extrae el FQDN de la página donde se encuentra el usuario.
 2. **Validación FQDN Estricta**: Consulta a la bóveda si existen credenciales para ese dominio exacto.
@@ -238,12 +249,13 @@ La extensión de Arca (disponible en la carpeta [`extension/`](file:///c:/Users/
 
 El backend actúa como un custodio seguro que implementa defensas en profundidad:
 
-* **Invalidación Global de Sesiones (`session_version`)**: Cada usuario posee un contador de versión. Al cambiar la contraseña maestra, la versión se incrementa en la base de datos, invalidando automáticamente todas las sesiones abiertas en cualquier otro dispositivo.
-* **Mitigación de Fuerza Bruta**: Un contador en memoria rastrea los intentos fallidos por correo. Al 5to intento incorrecto consecutivo, la cuenta se bloquea temporalmente por 15 minutos.
+* **Invalidación Global de Sesiones (`session_version`)**: Cada usuario posee un contador de versión. Al cambiar la contraseña maestra o activar/desactivar el MFA, la versión se incrementa en la base de datos, invalidando automáticamente todas las sesiones abiertas en cualquier otro dispositivo.
+* **Mitigación de Fuerza Bruta**: `express-rate-limit` aplica **5 peticiones por 15 minutos por IP** en los endpoints sensibles: registro, obtención de salt, login, cambio de contraseña, eliminación de cuenta y endpoints MFA. Además, el login compara siempre con bcrypt (incluso con un hash ficticio para emails inexistentes), por lo que el tiempo de respuesta no distingue cuentas reales de inexistentes.
 * **Cabeceras de Seguridad y CSP Estricto**:
-  * `Content-Security-Policy`: Solo permite scripts y estilos autorizados con hashes SRI (*Subresource Integrity*).
-  * `X-Frame-Options: DENY`: Evita ataques de *clickjacking*.
+  * `Content-Security-Policy`: `default-src 'self'`, `script-src 'self'`, `style-src 'self'`, `frame-ancestors 'none'`, sin `unsafe-inline` ni `unsafe-eval`.
+  * `X-Frame-Options: SAMEORIGIN` (complementado por `frame-ancestors 'none'` en la CSP): evita ataques de *clickjacking*.
   * `httpOnly`, `SameSite=Strict`: Cookies inmunes al robo mediante scripts maliciosos (XSS).
+  * Las respuestas de error son JSON (handler global): 400/413/404/500 sin volcar el stack trace.
 * **Persistencia Única en Supabase (PostgreSQL)**:
   * El servidor usa exclusivamente PostgreSQL alojado en Supabase; `server/src/db.js` valida `DATABASE_URL` al cargar y falla con un mensaje claro si falta o sigue siendo el placeholder.
   * Las migraciones SQL idempotentes (`server/sql/001…003`) se aplican automáticamente al arrancar o con `npm run db:migrate`. No existe ningún almacenamiento local de respaldo.

@@ -57,8 +57,9 @@ ARCA implementa el mismo modelo de seguridad usado por gestores de contraseñas 
 
 ### 🤖 CAPTCHA Anti-Bot (SHA-256 Proof of Work)
 - Requiere que el navegador resuelva un desafío criptográfico SHA-256 real (Hashcash) en segundo plano mediante un Web Worker.
-- Hace que los ataques automatizados y de fuerza bruta masiva sean computacionalmente prohibitivos.
+- Desincentiva los ataques automatizados al hacerlos computacionalmente más caros.
 - Diseñado desde cero, sin trackers de terceros ni librerías externas.
+- **Es una mitigación de cliente:** el servidor no valida el PoW; quien limita los intentos en el backend es el rate limiting (5 peticiones/15 min por IP en registro, login y salt).
 
 ### 🎣 Anti-Phishing Shield
 - Analiza todas las URLs guardadas en busca de ataques de suplantación antes de almacenarlas.
@@ -80,6 +81,12 @@ ARCA implementa el mismo modelo de seguridad usado por gestores de contraseñas 
 - Genera códigos 2FA de 6 dígitos cada 30 segundos (RFC 6238).
 - Compatible con Google Authenticator, Authy, y cualquier app TOTP estándar.
 - Soporta URIs `otpauth://` para importación directa.
+
+### 🔐 MFA de Cuenta (Segundo Factor al Iniciar Sesión)
+- Activo opcional desde *Mi Cuenta* con QR o clave manual; protege el acceso a la bóveda, no solo a una credencial.
+- El login se vuelve de **dos pasos**: con MFA activo el servidor responde `{mfaRequired:true}` con una cookie intermedia `mfa` de 5 minutos y **sin** `wrappedVaultKey`; la Vault Key solo llega tras `POST /api/auth/mfa/verify`.
+- El secreto se guarda cifrado con AES-256-GCM y `TOTP_ENC_KEY` (clave del servidor, necesario para verificar); anti-replay por time-step (`mfa_last_counter` reclamado de forma atómica), ventana ±1 periodo y **10 códigos de respaldo** bcrypt (cost 12) de un solo uso.
+- Limitación honesta: al estar el secreto bajo clave del servidor, el MFA protege frente a contraseñas robadas o reutilizadas, no frente a un servidor malicioso.
 
 ### 🧩 Extensión de Navegador
 - Autorrellena credenciales en formularios de login detectados automáticamente.
@@ -120,7 +127,8 @@ ARCA implementa el mismo modelo de seguridad usado por gestores de contraseñas 
 │  - Endpoint de Salt (devuelve kdfSalt por email)            │
 │  - Endpoint de Login (valida authHash, emite sesión JWT)    │
 │  - CRUD de Bóveda (almacena blobs cifrados opacos)          │
-│  - Base de Datos (SQLite / PostgreSQL)                     │
+│  - MFA TOTP (verificación en 2 pasos con cookie intermedia) │
+│  - Base de Datos (PostgreSQL en Supabase)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -136,13 +144,13 @@ Contraseña Maestra (Entrada del usuario)
   ├─► PBKDF2 (600,000 iteraciones + Salt 16 bytes)
   │     └─► Master Key (256 bits)
   │           │
-  │           ├─► HKDF [info="encryption"] ──► Encryption Key (AES-256-GCM)
+  │           ├─► HKDF [info="enc"] ──► Encryption Key (AES-256-GCM)
   │           │                                      │
   │           │                                      └─► Cifra / Descifra la Vault Key
   │           │
-  │           └─► HKDF [info="authentication"] ──► Auth Hash (256 bits)
+  │           └─► HKDF [info="auth"] ──► Auth Key Material (32 bytes)
   │                                                  │
-  │                                                  └─► Se envía al Servidor (Login/Registro)
+  │                                                  └─► authHash = Base64(...) → al servidor
 ```
 
 1. **Nunca viaja la contraseña maestra:** Solo el `authHash` llega al servidor.
@@ -159,7 +167,7 @@ Contraseña Maestra (Entrada del usuario)
 | **Web Crypto API (`window.crypto.subtle`)** | Criptografía cliente | Implementación nativa en C++ del motor del navegador. Resistente a ataques de temporización (constant-time) y con aceleración por hardware (AES-NI). |
 | **Vite** | Bundler Frontend | Compilación ultrarrápida, soporte nativo de ESM y Workers. |
 | **Node.js + Express** | Servidor API | Ligero, robusto, ecosistema maduro de middleware de seguridad. |
-| **SQLite / PostgreSQL** | Base de Datos | Persistencia relacional ACID de metadatos y blobs cifrados. |
+| **PostgreSQL (Supabase)** | Base de Datos | Persistencia relacional ACID de metadatos y blobs cifrados. |
 
 ---
 
@@ -171,8 +179,10 @@ Contraseña Maestra (Entrada del usuario)
 - **Función hash:** SHA-256.
 
 ### 6.2 HKDF (RFC 5869)
-- **Subclave 1 (`info = "encryption"`):** Clave AES-256-GCM para envolver/desenvolver la Vault Key.
-- **Subclave 2 (`info = "authentication"`):** Hash SHA-256 codificado en base64 para autenticación en el servidor.
+- **Subclave 1 (`info = "enc"`):** Clave AES-256-GCM para envolver/desenvolver la Vault Key.
+- **Subclave 2 (`info = "auth"`):** 32 bytes de Auth Key Material, codificados en Base64 para formar el `authHash` que se envía al servidor (sin ningún hash intermedio adicional).
+
+Ambos contextos son independientes: conocer el `authHash` no permite derivar la Encryption Key.
 
 ### 6.3 AES-256-GCM (NIST SP 800-38D)
 - **Modo:** Galois/Counter Mode (GCM), cifrado autenticado con datos asociados (AEAD).
@@ -208,23 +218,31 @@ Calcula métricas de calidad de la bóveda: contraseñas débiles, repetidas o f
 Genera contraseñas aleatorias usando `crypto.getRandomValues()` sin sesgo de módulo.
 
 ### 7.8 CAPTCHA Proof of Work (`client/src/CaptchaBox.tsx`)
-Desafío Hashcash SHA-256 que se ejecuta de forma asíncrona en un Web Worker para proteger los endpoints contra ataques automatizados.
+Desafío Hashcash SHA-256 que se ejecuta de forma asíncrona en un Web Worker antes de registrar o iniciar sesión. Es una barrera de cliente: el backend no lo verifica y su contraparte real es el rate limiting.
+
+### 7.9 MFA de Cuenta (cliente y servidor)
+- Cliente: `MfaSettings.tsx` (activación con QR/clave manual y códigos de respaldo) y `MfaChallenge.tsx` (reto de 6 dígitos en el login).
+- Servidor: `totp-secret.js` (genera, cifra con `TOTP_ENC_KEY` y verifica con ventana ±1 y `timingSafeEqual`), `mfa-backup-codes.js` (10 códigos bcrypt de un solo uso) y `middleware/requireMfaPending.js` (aisla la cookie intermedia `mfa` de la sesión normal).
+
+### 7.10 Puente con la Extensión (`client/src/extension-bridge.ts`)
+Publica la bóveda ya descifrada a la extensión mediante `window.postMessage` del mismo origen, solo mientras la bóveda está desbloqueada, y borra el buffer en logout o cierre de pestaña. Es el único punto donde credenciales legibles salen del estado de React.
 
 ---
 
 ## 8. Servidor y Base de Datos
 
 El servidor expone una API REST protegida por:
-- Cookies HttpOnly con firma JWT (`SameSite=Strict`).
-- Rate limiting por IP.
-- Cabeceras de seguridad estrictas mediante Helmet (Content Security Policy).
+- Cookies HttpOnly con firma JWT (`SameSite=Strict`, 8 horas) y `session_version` verificada en cada petición.
+- Rate limiting por IP (5 peticiones/15 min) en registro, salt, login, cambio de contraseña, eliminación de cuenta y endpoints MFA; `TRUST_PROXY` opt-in para detrás de un proxy inverso.
+- Cabeceras de seguridad estrictas mediante Helmet (Content Security Policy sin `unsafe-inline`/`unsafe-eval`).
 - Almacenamiento exclusivo de blobs opacos y hashes derivados (con hash adicional `bcrypt` en base de datos).
+- Handler global de errores y 404 en JSON (sin respuestas HTML ni stack traces).
 
 ---
 
 ## 9. Extensión de Navegador
 
-Ubicada en `extension/`, se comunica con la pestaña activa mediante `window.postMessage` para recibir temporalmente los accesos necesarios para autorrellenar formularios de inicio de sesión. No almacena información en disco.
+Ubicada en `extension/`, se comunica con la pestaña activa mediante `window.postMessage` para recibir temporalmente los accesos necesarios para autorrellenar formularios de inicio de sesión. Las credenciales sincronizadas viven únicamente en `chrome.storage.session` (memoria volátil: se vacían al cerrar la pestaña de la bóveda, al cerrar sesión o al cerrar la pestaña). En disco solo se persiste la preferencia booleana `autofill_enabled` del interruptor de autocompletado, que no contiene información sensible y por tanto no altera la arquitectura Zero-Knowledge.
 
 ---
 
@@ -296,7 +314,7 @@ Usuario: email + contraseña maestra
 | **Bóveda completamente ilegible para el servidor** | Cifrado AES-256-GCM en el cliente antes del envío. |
 | **Inviolabilidad ante brechas del servidor** | El servidor no posee claves maestras ni claves de bóveda. |
 | **Resistencia a ataques de fuerza bruta** | PBKDF2 con 600,000 iteraciones (~300ms por cómputo). |
-| **Protección contra bots y automatizaciones** | Desafío SHA-256 Proof of Work en Web Worker. |
+| **Protección contra bots y automatizaciones** | Desafío SHA-256 Proof of Work en Web Worker (cliente) + rate limiting 5/15 min por endpoint (servidor). |
 | **Autenticidad e integridad de datos** | Tag de autenticación GCM de 128 bits (AEAD). |
 | **Privacidad en consultas de brechas** | Modelo de k-Anonimato con prefijos SHA-1 de 5 caracteres. |
 

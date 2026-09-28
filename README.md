@@ -30,6 +30,10 @@ DB_SSL_REJECT_UNAUTHORIZED=false
 JWT_SECRET=una-clave-aleatoria-de-al-menos-32-caracteres
 COOKIE_SECURE=false
 FRONTEND_ORIGIN=http://localhost:5173
+# Opcional: solo si el servidor va detras de un proxy inverso (NGINX, load
+# balancer). Desactivado por defecto; con "1" el rate limiting usara la IP real
+# del cliente en vez de la del proxy.
+# TRUST_PROXY=1
 ```
 
 > **Importante:** En desarrollo sobre `http://localhost`, `COOKIE_SECURE=false` es necesario para que el navegador envíe la cookie de sesión sin HTTPS. En producción debe mantenerse en `true`.
@@ -38,7 +42,8 @@ FRONTEND_ORIGIN=http://localhost:5173
 
 ```bash
 npm run db:check    # verifica la conexión a PostgreSQL
-npm run db:migrate  # crea las tablas users y vault_items (idempotente)
+npm run db:migrate  # crea las tablas users, vault_items y mfa_backup_codes (idempotente)
+npm run db:seed     # opcional: crea cuentas de prueba (demo), idempotente
 ```
 
 ### 4. Arrancar el servidor
@@ -72,7 +77,7 @@ Vite mostrará la URL local del cliente (normalmente `http://localhost:5173`). E
 - **Vault Key** de 256 bits generada una vez en el registro, nunca almacenada en texto plano.
 - **bcryptjs** (cost 12) para hashing del authHash en servidor.
 - **JWT** HS256 en cookie httpOnly, Secure, SameSite=Strict (8 horas).
-- **Rate limiting** (5 intentos/15min) en login, cambio de contraseña, eliminación de cuenta y endpoints MFA.
+- **Rate limiting** (5 intentos/15min) en registro, login, obtención de salt, cambio de contraseña, eliminación de cuenta y endpoints MFA.
 - **MFA (TOTP, RFC 6238)**: segundo factor opcional solo para iniciar sesión. El secreto se guarda cifrado con AES-GCM (`TOTP_ENC_KEY`), con anti-replay por time-step, ventana ±1 periodo y 10 códigos de respaldo bcrypt de un solo uso.
 - **CSP** estricta via Helmet (sin unsafe-inline/eval).
 - **CORS** restringido a FRONTEND_ORIGIN.
@@ -80,11 +85,15 @@ Vite mostrará la URL local del cliente (normalmente `http://localhost:5173`). E
 
 ### Funcionalidad
 
-- **Bóveda de credenciales**: crear, editar, eliminar credenciales cifradas con split-pane layout (lista + detalle).
+- **Bóveda de credenciales**: crear, editar, eliminar credenciales cifradas con layout de 3 columnas (sidebar, lista con búsqueda y detalle).
+- **Favoritos**: marcar credenciales de uso frecuente para tenerlas a mano en el sidebar.
 - **Generador de contraseñas**: aleatoriedad criptográfica (`crypto.getRandomValues`) con rejection sampling.
 - **TOTP/2FA**: generación de códigos TOTP para credenciales que lo requieran.
 - **MFA de cuenta**: activación desde *Mi Cuenta* con QR o clave manual, código de respaldo en el login y desactivación con verificación.
 - **Detección de brechas (HIBP)**: verificación automática de contraseñas comprometidas usando k-Anonymity. Se ejecuta al desbloquear la bóveda.
+- **Anti-Phishing**: aviso al rellenar credenciales si el dominio de la página suplanta a otro conocido (typosquatting, homógrafos, punycode, HTTP).
+- **CAPTCHA (Proof-of-Work)**: reto PoW resuelto en el navegador antes de registrar o iniciar sesión, para dificultar el abuso automatizado. Es una mitigación de cliente: el servidor no lo valida.
+- **Extensión de navegador**: extensión MV3 (*Arca Shield*) que recibe la bóveda descifrada desde la app por `postMessage` del mismo origen y ofrece autofill.
 - **Security Dashboard**: métricas de salud, credenciales, alertas y brechas HIBP.
 - **Cambio de contraseña maestra**: re-derivación de claves y re-envoltura de la Vault Key sin modificar ciphertexts existentes.
 - **Eliminación de cuenta**: eliminación permanente de todos los datos cifrados.
@@ -96,7 +105,7 @@ Vite mostrará la URL local del cliente (normalmente `http://localhost:5173`). E
 
 | Campo | Longitud máxima | Notas |
 |---|---|---|
-| Email | 40 caracteres | Formato válido obligatorio |
+| Email | 40 caracteres en la UI | Formato válido obligatorio; el servidor admite hasta 254 |
 | Contraseña maestra | 42 caracteres | Mínimo 12 caracteres |
 | Nombre de credencial | 30 caracteres | Al menos una letra |
 | Usuario de credencial | 30 caracteres | Al menos una letra |
@@ -105,14 +114,16 @@ Vite mostrará la URL local del cliente (normalmente `http://localhost:5173`). E
 | Secreto TOTP | 128 caracteres | Base32 |
 | Cuerpo JSON servidor | 2 MB | Límite de Express |
 
+Los campos de una credencial viajan cifrados, así que solo el cliente puede validar su contenido: sus límites se aplican en `client/src/validation.ts`. El servidor valida la forma (Base64, tamaños) de los blobs y el material de derivación.
+
 ## Pruebas y auditoría
 
 ```bash
-# Servidor (node:test + supertest)
+# Servidor (node:test + supertest) — 21 tests
 cd server
 npm test
 
-# Cliente (Vitest)
+# Cliente (Vitest) — 88 tests en 11 ficheros
 cd client
 npm test
 npm run build

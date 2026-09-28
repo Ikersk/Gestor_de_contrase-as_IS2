@@ -113,6 +113,113 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.4);
 }
 
+/* ── Interruptor rápido de autocompletado ── */
+.autofill-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.autofill-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.autofill-switch-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.autofill-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  color: var(--text-main);
+  font: inherit;
+}
+
+.autofill-switch__state {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--success);
+  min-width: 24px;
+  text-align: right;
+}
+
+.autofill-switch__track {
+  position: relative;
+  display: block;
+  width: 36px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.autofill-switch__thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s ease;
+}
+
+/* Estado ON */
+.autofill-switch[aria-checked="true"] .autofill-switch__thumb {
+  transform: translateX(16px);
+}
+
+/* Estado OFF */
+.autofill-switch[aria-checked="false"] .autofill-switch__track {
+  background: rgba(148, 163, 184, 0.35);
+  border-color: var(--border);
+}
+
+.autofill-switch[aria-checked="false"] .autofill-switch__thumb {
+  transform: translateX(0);
+}
+
+.autofill-switch[aria-checked="false"] .autofill-switch__state {
+  color: var(--text-muted);
+}
+
+.autofill-switch:hover .autofill-switch__track {
+  box-shadow: 0 0 0 3px var(--brand-bg);
+}
+
+.autofill-switch:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .autofill-switch__track,
+  .autofill-switch__thumb {
+    transition: none;
+  }
+}
+
 .popup-body {
   display: flex;
   flex-direction: column;

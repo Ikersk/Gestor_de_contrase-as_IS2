@@ -8,6 +8,45 @@ let matchingCredentials = [];
 let lastFilledCredential = null;
 let activeDropdownInput = null;
 
+// Interruptor global de autocompletado. Es una preferencia del usuario
+// (booleano en storage.local), no un secreto: la bóveda sigue solo en
+// storage.session y no se ve afectada por apagar el autocompletado.
+let autofillEnabled = true;
+
+try {
+  chrome.storage.local.get({ autofill_enabled: true }, (data) => {
+    if (chrome.runtime.lastError) return;
+    autofillEnabled = data?.autofill_enabled !== false;
+    if (autofillEnabled) loadVaultCredentials();
+    else removeAllFieldIcons();
+  });
+} catch {}
+
+// La aplicación de la bóveda no recibe UI de autocompletado: su campo de
+// contraseña es la contraseña maestra, no una credencial guardada.
+function isVaultAppPage() {
+  return (
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+    window.location.port === '5173'
+  );
+}
+
+/** La bóveda sincronizada vive en memoria (storage.session), nunca en disco. */
+function vaultStorageArea() {
+  try {
+    if (chrome.storage && chrome.storage.session) return chrome.storage.session;
+  } catch {}
+  return chrome.storage.local;
+}
+
+/** Envía un mensaje al service worker sin dejar rechazos sin manejar. */
+function sendToBackground(message) {
+  try {
+    const result = chrome.runtime.sendMessage(message);
+    if (result && typeof result.catch === 'function') result.catch(() => {});
+  } catch {}
+}
+
 // Recuperar última credencial de la sesión (para flujos multi-paso como Google / Microsoft)
 try {
   const cached = sessionStorage.getItem('arca_last_filled');
@@ -157,10 +196,25 @@ function computeMatchingCredentials(tabUrl, items) {
 
 // ── Carga y sincronización reactiva de credenciales con chrome.storage ──
 
+let vaultLoadAttempts = 0;
+
 function loadVaultCredentials() {
+  if (isVaultAppPage()) return;
+
   try {
-    chrome.storage.local.get('arca_vault_items', (data) => {
-      allVaultCredentials = Array.isArray(data?.arca_vault_items) ? data.arca_vault_items : [];
+    vaultStorageArea().get('arca_vault_items', (data) => {
+      if (chrome.runtime.lastError || !data) {
+        // El service worker todavía no ha abierto storage.session a los
+        // content scripts: reintentar unas pocas veces antes de rendirse.
+        if (vaultLoadAttempts < 5) {
+          vaultLoadAttempts += 1;
+          setTimeout(loadVaultCredentials, 400 * vaultLoadAttempts);
+        }
+        return;
+      }
+
+      vaultLoadAttempts = 0;
+      allVaultCredentials = Array.isArray(data.arca_vault_items) ? data.arca_vault_items : [];
       matchingCredentials = computeMatchingCredentials(window.location.href, allVaultCredentials);
       scanAndAttach();
     });
@@ -169,8 +223,21 @@ function loadVaultCredentials() {
 
 try {
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local' && changes.arca_vault_items) {
-      allVaultCredentials = Array.isArray(changes.arca_vault_items.newValue) ? changes.arca_vault_items.newValue : [];
+    // Interruptor de autocompletado: retirar o recrear la UI de inmediato.
+    if (areaName === 'local' && changes.autofill_enabled) {
+      autofillEnabled = changes.autofill_enabled.newValue !== false;
+      if (autofillEnabled) {
+        loadVaultCredentials();
+      } else {
+        removeAllFieldIcons();
+      }
+      return;
+    }
+
+    if ((areaName === 'session' || areaName === 'local') && changes.arca_vault_items) {
+      allVaultCredentials = Array.isArray(changes.arca_vault_items.newValue)
+        ? changes.arca_vault_items.newValue
+        : [];
       matchingCredentials = computeMatchingCredentials(window.location.href, allVaultCredentials);
       scanAndAttach();
     }
@@ -237,6 +304,53 @@ function scoreUserInput(input) {
   return score;
 }
 
+const NON_TEXT_INPUT_TYPES = new Set([
+  'hidden', 'submit', 'button', 'reset', 'image', 'file',
+  'checkbox', 'radio', 'range', 'color',
+  'date', 'datetime-local', 'month', 'week', 'time',
+]);
+
+const USERNAME_INPUT_KEYWORDS = /(user|usuario|login|correo|email|mail|cuenta|nickname|identifier|pass|clave|contrase)/;
+
+/**
+ * Decide si un input merece el icono de autocompletado y aparecer como
+ * candidato de usuario. Excluye buscadores, botones y cualquier campo que no
+ * sea parte realista de un formulario de acceso.
+ */
+function isAutofillCandidateInput(input) {
+  if (!input) return false;
+  if (String(input.tagName || '').toUpperCase() !== 'INPUT') return false;
+
+  const type = String(input.type || 'text').toLowerCase();
+  if (NON_TEXT_INPUT_TYPES.has(type)) return false;
+
+  if (type === 'password' || type === 'email') return true;
+
+  const autocomplete = String(
+    (input.getAttribute && input.getAttribute('autocomplete')) || '',
+  ).toLowerCase();
+  if (autocomplete === 'username' || autocomplete === 'current-password' || autocomplete === 'new-password') {
+    return true;
+  }
+
+  const name = String(input.name || '').toLowerCase();
+  const id = String(input.id || '').toLowerCase();
+  if (USERNAME_INPUT_KEYWORDS.test(name) || USERNAME_INPUT_KEYWORDS.test(id)) return true;
+
+  // Último recurso: un campo de texto plano solo cuenta si comparte formulario
+  // con un campo de contraseña (descarta buscadores y formularios comunes).
+  if (type === 'text') {
+    const form =
+      (input.form && typeof input.form === 'object' && input.form) ||
+      (input.closest ? input.closest('form') : null);
+    if (form && typeof form.querySelector === 'function' && form.querySelector('input[type="password"]')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function findLoginInputs() {
   const allInputs = Array.from(document.querySelectorAll('input'));
   const validInputs = allInputs.filter(isElementVisible);
@@ -250,11 +364,8 @@ function findLoginInputs() {
 
     if (isPass) {
       passwordCandidates.push({ input, score: scorePasswordInput(input) });
-    } else {
-      const score = scoreUserInput(input);
-      if (score > 0 || type === 'email' || (type === 'text' && (input.form || input.closest('form')))) {
-        userCandidates.push({ input, score });
-      }
+    } else if (isAutofillCandidateInput(input)) {
+      userCandidates.push({ input, score: scoreUserInput(input) });
     }
   }
 
@@ -706,7 +817,7 @@ function showAutofillToast(message) {
 // ── Inyección y Guardado de Credenciales en el DOM y Sesión ──
 
 function fillCredentialsIntoDom(username, password) {
-  if (isPhishingThreat) return false;
+  if (isPhishingThreat || isVaultAppPage() || !autofillEnabled) return false;
 
   const { userField, passwordField } = findLoginInputs();
   let filled = false;
@@ -732,7 +843,7 @@ function fillCredentialsIntoDom(username, password) {
       sessionStorage.setItem('arca_last_filled', JSON.stringify(lastFilledCredential));
     } catch {}
     try {
-      chrome.runtime.sendMessage({
+      sendToBackground({
         action: 'SET_LAST_FILLED',
         credential: lastFilledCredential,
       });
@@ -762,6 +873,7 @@ function fillCredentialsIntoDom(username, password) {
 
 function checkAndAutoFillPasswordStep(passwordField) {
   if (!passwordField || passwordField.dataset.arcaAutoFilled === 'true') return;
+  if (isVaultAppPage() || !autofillEnabled) return;
 
   // 1. Si tenemos la credencial guardada en la sesión del Paso 1
   if (lastFilledCredential && lastFilledCredential.password) {
@@ -805,9 +917,18 @@ function checkAndAutoFillPasswordStep(passwordField) {
 // ── Interfaz Minimalista (Badge integrado + Popover nativo anclado bajo el input) ──
 
 function removeInlineDropdown() {
-  const root = getOrCreateShadowRoot();
-  root.querySelector('.arca-popover-card')?.remove();
+  if (arcaShadowRoot) {
+    arcaShadowRoot.querySelector('.arca-popover-card')?.remove();
+  }
   activeDropdownInput = null;
+}
+
+function isInlineDropdownOpenFor(input) {
+  return (
+    activeDropdownInput === input &&
+    !!arcaShadowRoot &&
+    !!arcaShadowRoot.querySelector('.arca-popover-card')
+  );
 }
 
 function positionPopover(input, popover) {
@@ -835,13 +956,107 @@ function positionPopover(input, popover) {
   popover.style.width = `${popoverWidth}px`;
 }
 
-function attachFieldIcon(input) {
-  if (input._arcaIconAttached && document.contains(input._arcaIconAttached)) {
+// ── Registro único de iconos: un icono por campo, sin duplicados ni fugas ──
+
+const iconRegistry = new Map();
+const ICON_SIZE = 22;
+const MIN_ICON_FIELD_WIDTH = 100;
+
+function removeFieldIcon(input) {
+  const record = iconRegistry.get(input);
+  if (!record) return;
+
+  record.icon.remove();
+  input.removeEventListener('focus', record.onFocus);
+  input.removeEventListener('click', record.onClick);
+  input.removeEventListener('keydown', record.onKeydown);
+  try {
+    delete input._arcaIconAttached;
+  } catch {
+    input._arcaIconAttached = undefined;
+  }
+  iconRegistry.delete(input);
+
+  if (activeDropdownInput === input) removeInlineDropdown();
+}
+
+function repositionIcon(input) {
+  const record = iconRegistry.get(input);
+  if (!record) return;
+
+  if (!document.contains(input) || !record.icon.isConnected) {
+    removeFieldIcon(input);
     return;
   }
 
+  const visible = isElementVisible(input);
+  if (!visible) {
+    record.icon.style.display = 'none';
+    if (activeDropdownInput === input) removeInlineDropdown();
+    return;
+  }
+
+  const rect = input.getBoundingClientRect();
+  if (rect.width < MIN_ICON_FIELD_WIDTH) {
+    record.icon.style.display = 'none';
+  } else {
+    record.icon.style.display = 'flex';
+    record.icon.style.top = `${Math.round(rect.top + (rect.height - ICON_SIZE) / 2)}px`;
+    record.icon.style.left = `${Math.round(rect.right - ICON_SIZE - 6)}px`;
+  }
+
+  if (activeDropdownInput === input) {
+    const popover = record.wrapper.querySelector('.arca-popover-card');
+    if (popover) positionPopover(input, popover);
+  }
+}
+
+function repositionAllIcons() {
+  for (const input of Array.from(iconRegistry.keys())) {
+    repositionIcon(input);
+  }
+}
+
+let repositionFrame = 0;
+function scheduleRepositionAllIcons() {
+  if (repositionFrame) return;
+  repositionFrame = window.requestAnimationFrame(() => {
+    repositionFrame = 0;
+    repositionAllIcons();
+  });
+}
+
+/** Descarta iconos cuyo campo ya no existe o dejó de ser un campo de acceso. */
+function pruneStaleIcons() {
+  for (const input of Array.from(iconRegistry.keys())) {
+    if (!document.contains(input) || !isAutofillCandidateInput(input)) {
+      removeFieldIcon(input);
+    }
+  }
+}
+
+/** Retira todos los iconos del documento (interruptor en OFF). */
+function removeAllFieldIcons() {
+  for (const input of Array.from(iconRegistry.keys())) {
+    removeFieldIcon(input);
+  }
+}
+
+function attachFieldIcon(input) {
+  if (!input || !autofillEnabled || isVaultAppPage() || isPhishingThreat) return;
+  if (!isAutofillCandidateInput(input)) return;
+
   const root = getOrCreateShadowRoot();
   const wrapper = root.querySelector('.arca-wrapper');
+
+  // document.contains() no atraviesa los Shadow Roots: comprobar el vínculo real
+  // con isConnected/contains es lo que evita acumular iconos duplicados.
+  const existing = iconRegistry.get(input);
+  if (existing && existing.icon.isConnected && wrapper.contains(existing.icon)) {
+    repositionIcon(input);
+    return;
+  }
+  if (existing) removeFieldIcon(input);
 
   const icon = document.createElement('div');
   icon.className = 'arca-badge-element';
@@ -852,60 +1067,43 @@ function attachFieldIcon(input) {
     </svg>
   `;
 
-  function updateIconPosition() {
-    if (!document.contains(input)) {
-      icon.remove();
-      return;
-    }
-
-    const rect = input.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0 || !isElementVisible(input)) {
-      icon.style.display = 'none';
-      return;
-    }
-
-    icon.style.display = 'flex';
-    icon.style.top = `${rect.top + (rect.height - 22) / 2}px`;
-    icon.style.left = `${rect.right - 26}px`;
-
-    // Si el menú está abierto para este input, reubicarlo suavemente
-    const activePopover = wrapper.querySelector('.arca-popover-card');
-    if (activePopover && activeDropdownInput === input) {
-      positionPopover(input, activePopover);
-    }
-  }
-
-  updateIconPosition();
-  input._arcaIconAttached = icon;
-
-  window.addEventListener('resize', updateIconPosition, { passive: true });
-  window.addEventListener('scroll', updateIconPosition, { passive: true, capture: true });
-
   icon.addEventListener('mousedown', (e) => {
     e.preventDefault();
     e.stopPropagation();
     toggleInlineDropdown(input);
   });
 
-  wrapper.appendChild(icon);
-
-  // Al hacer clic o foco en el campo, mostrar el menú bajo el input
-  input.addEventListener('focus', () => showInlineDropdown(input));
-  input.addEventListener('click', () => showInlineDropdown(input));
-
-  // Enter para autocompletar de inmediato si hay una sola cuenta
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && matchingCredentials.length === 1 && wrapper.querySelector('.arca-popover-card')) {
+  // Los listeners del campo se vinculan una sola vez por input.
+  const onFocus = () => {
+    if (!isInlineDropdownOpenFor(input)) showInlineDropdown(input);
+  };
+  const onClick = () => {
+    if (!isInlineDropdownOpenFor(input)) showInlineDropdown(input);
+  };
+  const onKeydown = (e) => {
+    if (e.key === 'Enter' && matchingCredentials.length === 1 && isInlineDropdownOpenFor(input)) {
       e.preventDefault();
       const chosen = matchingCredentials[0];
       fillCredentialsIntoDom(chosen.username, chosen.password);
     }
-  });
+  };
+
+  input.addEventListener('focus', onFocus);
+  input.addEventListener('click', onClick);
+  input.addEventListener('keydown', onKeydown);
+
+  wrapper.appendChild(icon);
+  input._arcaIconAttached = icon;
+  iconRegistry.set(input, { icon, wrapper, onFocus, onClick, onKeydown });
+  repositionIcon(input);
 }
 
+// Reposicionado único para scroll/resize (antes había uno por icono).
+window.addEventListener('resize', scheduleRepositionAllIcons, { passive: true });
+window.addEventListener('scroll', scheduleRepositionAllIcons, { passive: true, capture: true });
+
 function toggleInlineDropdown(input) {
-  const root = getOrCreateShadowRoot();
-  if (root.querySelector('.arca-popover-card') && activeDropdownInput === input) {
+  if (isInlineDropdownOpenFor(input)) {
     removeInlineDropdown();
   } else {
     showInlineDropdown(input);
@@ -1109,12 +1307,22 @@ function bindClickEvents(container, items) {
 
 // Cerrar dropdown al hacer clic fuera o Escape
 document.addEventListener('click', (e) => {
-  const root = getOrCreateShadowRoot();
-  const wrapper = root.querySelector('.arca-wrapper');
+  const wrapper = arcaShadowRoot ? arcaShadowRoot.querySelector('.arca-wrapper') : null;
   const path = e.composedPath ? e.composedPath() : [];
-  const clickedInsideExtension = path.some((el) => el === wrapper || el?.classList?.contains?.('arca-popover-card') || el?.classList?.contains?.('arca-badge-element'));
 
-  if (!clickedInsideExtension) {
+  const clickedInsideExtension =
+    !!wrapper &&
+    path.some(
+      (el) =>
+        el === wrapper ||
+        el?.classList?.contains?.('arca-popover-card') ||
+        el?.classList?.contains?.('arca-badge-element'),
+    );
+
+  // El clic sobre un campo gestionado acaba de abrir el menú: no cerrarlo aquí.
+  const clickedManagedInput = path.some((el) => !!el && !!el._arcaIconAttached);
+
+  if (!clickedInsideExtension && !clickedManagedInput) {
     removeInlineDropdown();
   }
 });
@@ -1126,12 +1334,19 @@ document.addEventListener('keydown', (e) => {
 // ── Escaneo y vinculación automática continua ──
 
 function scanAndAttach() {
-  if (isPhishingThreat) return;
+  if (!autofillEnabled) {
+    // Interrumpido: retirar cualquier insignia que haya quedado por el camino.
+    if (iconRegistry.size > 0) removeAllFieldIcons();
+    return;
+  }
+  if (isPhishingThreat || isVaultAppPage()) return;
 
   const { allUserFields, allPasswordFields, passwordField } = findLoginInputs();
 
   allUserFields.forEach((u) => attachFieldIcon(u));
   allPasswordFields.forEach((p) => attachFieldIcon(p));
+  pruneStaleIcons();
+  repositionAllIcons();
 
   // Autocompletado inmediato de contraseña en flujos de 2 pasos
   if (passwordField) {
@@ -1171,28 +1386,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     isPhishingThreat = true;
     currentThreatData = message.data;
   } else if (message.action === 'AUTOFILL_CREDENTIALS') {
+    if (!autofillEnabled) {
+      sendResponse({ success: false, disabled: true });
+      return false;
+    }
     const success = fillCredentialsIntoDom(message.username, message.password);
     sendResponse({ success });
     return true;
   }
 });
 
-// Sincronización en tiempo real desde la aplicación Arca (localhost o 127.0.0.1)
+// Sincronización en tiempo real desde la aplicación Arca (localhost o 127.0.0.1).
+// Solo la propia pestaña de la bóveda, y solo mensajes de su mismo origen,
+// pueden escribir en la extensión: ninguna web ajena puede envenenarla.
 window.addEventListener('message', (event) => {
-  if (event.data?.type === 'ARCA_VAULT_SYNC' && Array.isArray(event.data.credentials)) {
-    chrome.runtime.sendMessage({
-      action: 'SAVE_VAULT_ITEMS',
-      items: event.data.credentials,
-    });
-  } else if (event.data?.type === 'ARCA_VAULT_CLEAR') {
-    chrome.runtime.sendMessage({
-      action: 'CLEAR_VAULT_ITEMS',
-    });
-  }
+  if (!isVaultAppPage()) return;
+  if (event.origin && event.origin !== window.location.origin) return;
+
+  try {
+    if (event.data?.type === 'ARCA_VAULT_SYNC' && Array.isArray(event.data.credentials)) {
+      sendToBackground({
+        action: 'SAVE_VAULT_ITEMS',
+        items: event.data.credentials,
+      });
+    } else if (event.data?.type === 'ARCA_VAULT_CLEAR') {
+      sendToBackground({
+        action: 'CLEAR_VAULT_ITEMS',
+      });
+    }
+  } catch {}
 });
 
-if ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port === '5173') {
-  window.postMessage({ type: 'ARCA_REQUEST_SYNC' }, '*');
+if (isVaultAppPage()) {
+  // Pedir la bóveda a la pestaña: React puede montar después que este script.
+  const requestSync = () => window.postMessage({ type: 'ARCA_REQUEST_SYNC' }, '*');
+  requestSync();
+  setTimeout(requestSync, 600);
+  setTimeout(requestSync, 2000);
 }
 
 // Ciclo de inicialización garantizado (inmediato, 100ms, 300ms, 800ms, 1800ms)

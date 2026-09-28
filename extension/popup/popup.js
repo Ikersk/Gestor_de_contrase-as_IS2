@@ -19,9 +19,77 @@ document.addEventListener('DOMContentLoaded', async () => {
   const popupSearchInput = document.getElementById('popup-search-input');
   const popupVaultList = document.getElementById('popup-vault-list');
   const autofillToast = document.getElementById('autofill-toast');
+  const autofillDisabledSection = document.getElementById('autofill-disabled-section');
+  const autofillSwitch = document.getElementById('autofill-switch');
+  const autofillSwitchState = document.getElementById('autofill-switch-state');
 
   let activeTab = null;
   let allVaultItems = [];
+  let autofillEnabled = true;
+
+  const AUTOFILL_KEY = 'autofill_enabled';
+
+  /** Pinta el interruptor según el estado actual. */
+  function renderAutofillSwitch() {
+    autofillSwitch?.setAttribute('aria-checked', String(autofillEnabled));
+    if (autofillSwitchState) {
+      autofillSwitchState.textContent = autofillEnabled ? 'ON' : 'OFF';
+    }
+  }
+
+  /** Apaga todas las secciones de credenciales y muestra el aviso de OFF. */
+  function showAutofillDisabled() {
+    vaultLockedSection.classList.add('hidden');
+    autofillSection.classList.add('hidden');
+    vaultBrowseSection.classList.add('hidden');
+    autofillDisabledSection.classList.remove('hidden');
+  }
+
+  /** Alterna el interruptor y propaga el cambio a todas las pestañas. */
+  async function toggleAutofill() {
+    autofillEnabled = !autofillEnabled;
+    renderAutofillSwitch();
+
+    try {
+      await chrome.storage.local.set({ [AUTOFILL_KEY]: autofillEnabled });
+    } catch {}
+
+    if (autofillEnabled) {
+      autofillDisabledSection.classList.add('hidden');
+      if (activeTab && activeTab.url) refreshCredentialSections().catch(() => {});
+    } else {
+      showAutofillDisabled();
+    }
+  }
+
+  // Estado persistido (solo una preferencia booleana; nunca credenciales)
+  try {
+    const stored = await chrome.storage.local.get({ [AUTOFILL_KEY]: true });
+    autofillEnabled = stored[AUTOFILL_KEY] !== false;
+  } catch {}
+  renderAutofillSwitch();
+
+  autofillSwitch?.addEventListener('click', toggleAutofill);
+  /** La bóveda sincronizada vive en memoria (storage.session), nunca en disco. */
+  function vaultStorageArea() {
+    try {
+      if (chrome.storage && chrome.storage.session) return chrome.storage.session;
+    } catch {}
+    return chrome.storage.local;
+  }
+
+  /** true cuando la pestaña activa es la aplicación de la bóveda Arca. */
+  function isVaultUrl(url) {
+    try {
+      const parsed = new URL(url);
+      return (
+        (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+        parsed.port === '5173'
+      );
+    } catch {
+      return false;
+    }
+  }
 
   function openVaultTab() {
     chrome.tabs.create({ url: 'http://localhost:5173' });
@@ -56,16 +124,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       for (const tab of localTabs) {
         if (!chrome.scripting) continue;
+
+        // Pedir a la pestaña de la bóveda que republicue sus credenciales.
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            world: 'MAIN',
+            func: () => window.postMessage({ type: 'ARCA_REQUEST_SYNC' }, '*'),
+          });
+        } catch {}
+
+        // La respuesta viaja por postMessage: darle un instante antes de leer.
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
         const results = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          func: () => {
-            window.postMessage({ type: 'ARCA_REQUEST_SYNC' }, '*');
-            return window.__ARCA_VAULT_ITEMS__ || null;
-          },
+          world: 'MAIN',
+          func: () => window.__ARCA_VAULT_ITEMS__ || null,
         });
         const items = results?.[0]?.result;
         if (Array.isArray(items) && items.length > 0) {
-          await chrome.storage.local.set({ arca_vault_items: items });
+          await vaultStorageArea().set({ arca_vault_items: items });
           return items;
         }
       }
@@ -76,6 +155,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function triggerAutofill(username, password) {
     if (!activeTab || !activeTab.id) return;
 
+    // Interruptor en OFF: nada de relleno, ni siquiera por el fallback directo.
+    if (!autofillEnabled) {
+      showSuccessToast('Autocompletado desactivado');
+      return;
+    }
+
+    // En la propia bóveda el campo de contraseña es la contraseña maestra.
+    if (isVaultUrl(activeTab.url)) {
+      showSuccessToast('Abre la web que quieres autocompletar, no la Bóveda Arca');
+      return;
+    }
+
     try {
       chrome.tabs.sendMessage(
         activeTab.id,
@@ -85,6 +176,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           password,
         },
         async (res) => {
+          // El content script respondió que el interruptor está en OFF:
+          // no recurrir al relleno directo, que lo saltaría.
+          if (res && res.disabled) {
+            showSuccessToast('Autocompletado desactivado');
+            return;
+          }
           if (chrome.runtime.lastError || !res || !res.success) {
             await executeDirectAutofill(activeTab.id, username, password);
           }
@@ -100,6 +197,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function executeDirectAutofill(tabId, username, password) {
     if (!chrome.scripting) return;
 
+    // Última barrera: este camino salta el content script, así que comprueba
+    // el interruptor antes de tocar el DOM de la pestaña.
+    if (!autofillEnabled) return;
+
     // Intentar también inyectar el content script si la pestaña no lo tenía (ej. pestaña abierta antes de recargar la extensión)
     try {
       await chrome.scripting.executeScript({
@@ -111,6 +212,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
       func: (user, pass) => {
+        // Nunca autocompletar en la propia bóveda: ahí el campo de contraseña
+        // es la contraseña maestra, no una credencial guardada.
+        const host = window.location.hostname;
+        if ((host === 'localhost' || host === '127.0.0.1') && window.location.port === '5173') return;
+
         function setVal(el, val) {
           if (!el || val === undefined || val === null) return;
           el.focus();
@@ -266,6 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       vaultLockedSection.classList.add('hidden');
       autofillSection.classList.add('hidden');
       vaultBrowseSection.classList.add('hidden');
+      autofillDisabledSection.classList.add('hidden');
 
       threatTitle.textContent = report.title || 'Alerta de Phishing';
       threatDesc.textContent = report.description || 'Se detectaron indicios de suplantación de identidad.';
@@ -281,6 +388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       vaultLockedSection.classList.add('hidden');
       autofillSection.classList.add('hidden');
       vaultBrowseSection.classList.add('hidden');
+      autofillDisabledSection.classList.add('hidden');
 
       threatTitle.textContent = report.title || 'Conexión Insegura';
       threatDesc.textContent = report.description || 'El tráfico viaja en texto plano sin cifrado HTTPS.';
@@ -292,8 +400,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     threatSection.classList.add('hidden');
     safeSection.classList.remove('hidden');
 
+    refreshCredentialSections().catch(() => {});
+  });
+
+  /**
+   * Lista las credenciales disponibles para la pestaña activa.
+   * Se ejecuta al abrir el popup y cada vez que se reactiva el interruptor.
+   */
+  async function refreshCredentialSections() {
+    if (!activeTab || !activeTab.url) return;
+
+    // Interruptor en OFF: no se ofrecen ni se listan credenciales.
+    if (!autofillEnabled) {
+      showAutofillDisabled();
+      return;
+    }
+    autofillDisabledSection.classList.add('hidden');
+
+    // En la propia Bóveda Arca no se ofrecen credenciales: su campo de
+    // contraseña es la contraseña maestra, no una credencial guardada.
+    if (isVaultUrl(activeTab.url)) {
+      vaultLockedSection.classList.add('hidden');
+      autofillSection.classList.add('hidden');
+      vaultBrowseSection.classList.add('hidden');
+      return;
+    }
+
     // 2. Obtener credenciales (con intento de sincronización automática desde la pestaña local)
-    let stored = (await chrome.storage.local.get('arca_vault_items'))?.arca_vault_items;
+    let stored = (await vaultStorageArea().get('arca_vault_items'))?.arca_vault_items;
     if (!Array.isArray(stored) || stored.length === 0) {
       stored = await tryAutoSyncFromLocalVault();
     }
@@ -311,6 +445,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Consultar coincidencias para esta página web
     chrome.runtime.sendMessage({ action: 'GET_MATCHING_CREDENTIALS', url: activeTab.url }, (resp) => {
+      // El interruptor pudo apagarse mientras se consultaba.
+      if (!autofillEnabled) {
+        showAutofillDisabled();
+        return;
+      }
+
       const matches = resp?.matches || [];
       if (matches.length > 0) {
         renderCards(autofillList, matches);
@@ -333,7 +473,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         vaultBrowseSection.classList.remove('hidden');
       }
     });
-  });
+  }
 
   // Búsqueda en vivo en la sección de la bóveda
   popupSearchInput?.addEventListener('input', (e) => {
@@ -346,4 +486,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     renderCards(popupVaultList, filtered);
   });
+
+  // Mantener el interruptor sincronizado si cambia desde otra pestaña o contexto
+  try {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'local' || !changes[AUTOFILL_KEY]) return;
+      const next = changes[AUTOFILL_KEY].newValue !== false;
+      if (next === autofillEnabled) return;
+
+      autofillEnabled = next;
+      renderAutofillSwitch();
+      if (autofillEnabled) {
+        autofillDisabledSection.classList.add('hidden');
+        if (activeTab && activeTab.url) refreshCredentialSections().catch(() => {});
+      } else {
+        showAutofillDisabled();
+      }
+    });
+  } catch {}
 });

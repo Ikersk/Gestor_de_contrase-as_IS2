@@ -135,6 +135,16 @@ function createAuthRouter({ dbPool }) {
     legacyHeaders: false,
     message: { error: 'Too many salt requests. Try again later.' },
   });
+  // El registro ejecuta un bcrypt cost 12 por intento y responde 409 si el email
+  // ya existe: sin limite seria a la vez un oraculo de enumeracion y un vector
+  // de agotamiento de CPU para el servidor.
+  const registerLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many registration attempts. Try again later.' },
+  });
   // El verificador de codigos es la puerta mas sensible: limite corto y generoso
   // solo en ventana, para que un atacante no pruebe codigos indefinidamente.
   const mfaVerifyLimiter = rateLimit({
@@ -161,7 +171,7 @@ function createAuthRouter({ dbPool }) {
 
   // Valida, rehashea y persiste solo el material derivado que prepara el cliente.
   // POST /register: almacena el Auth Hash rehasheado y los blobs cifrados del cliente.
-  router.post('/register', async (request, response, next) => {
+  router.post('/register', registerLimiter, async (request, response, next) => {
     const payload = parsePayload(registerSchema, request.body);
     if (!payload) {
       return response.status(400).json({ error: 'Invalid registration payload' });

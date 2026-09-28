@@ -40,6 +40,13 @@ import {
 } from "./password-generator";
 import { auditVault } from "./vault-health";
 import type { VaultHealthAlert } from "./vault-health";
+import {
+  clearVault,
+  installExtensionBridge,
+  publishVault,
+  toExtensionItems,
+} from "./extension-bridge";
+import type { ExtensionVaultItem } from "./extension-bridge";
 import { checkCredentialsBreach } from "./hibp";
 import { VaultShell } from "./vault/VaultShell";
 import { MfaChallenge } from "./MfaChallenge";
@@ -151,6 +158,8 @@ function AccountModal({
   onSubmitPassword,
   deletePassword,
   onDeletePasswordChange,
+  deleteConfirmOpen,
+  onDeleteConfirmOpenChange,
   onDeleteConfirm,
   isDeleting,
   deleteError,
@@ -161,6 +170,8 @@ function AccountModal({
   onSubmitPassword: (event: FormEvent<HTMLFormElement>) => void;
   deletePassword: string;
   onDeletePasswordChange: (value: string) => void;
+  deleteConfirmOpen: boolean;
+  onDeleteConfirmOpenChange: (open: boolean) => void;
   onDeleteConfirm: () => void;
   isDeleting: boolean;
   deleteError: string | null;
@@ -320,7 +331,7 @@ function AccountModal({
           Eliminar tu cuenta borrará permanentemente todos tus datos cifrados.
           Esta acción no se puede deshacer.
         </p>
-        {deletePassword !== "" ? (
+        {deleteConfirmOpen ? (
           <div className="delete-confirm-field">
             <label htmlFor="delete-confirm-password">
               Escribe tu contraseña actual para confirmar
@@ -370,7 +381,10 @@ function AccountModal({
               <button
                 className="secondary-button"
                 type="button"
-                onClick={() => onDeletePasswordChange("")}
+                onClick={() => {
+                  onDeletePasswordChange("");
+                  onDeleteConfirmOpenChange(false);
+                }}
               >
                 Cancelar
               </button>
@@ -380,7 +394,7 @@ function AccountModal({
           <button
             className="secondary-button delete-account-trigger"
             type="button"
-            onClick={() => onDeletePasswordChange(" ")}
+            onClick={() => onDeleteConfirmOpenChange(true)}
           >
             Eliminar Cuenta
           </button>
@@ -663,12 +677,15 @@ function App() {
   const [isCheckingBreach, setIsCheckingBreach] = useState(false);
   const [breachError, setBreachError] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [confirmMasterPassword, setConfirmMasterPassword] = useState("");
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [showConfirmMasterPassword, setShowConfirmMasterPassword] = useState(false);
   const [showCredentialPassword, setShowCredentialPassword] = useState(false);
   const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
+  const extensionItemsRef = useRef<ExtensionVaultItem[]>([]);
+  const wasAuthenticatedRef = useRef(false);
 
   function addToast(msg: string, type: Toast["type"] = "success") {
     const id = ++toastIdRef.current;
@@ -727,6 +744,37 @@ function App() {
     if (deletingId !== null && !modal.open) modal.showModal();
     if (deletingId === null && modal.open) modal.close();
   }, [deletingId]);
+
+  /** Mantiene un espejo en memoria de lo que se publica hacia la extensión. */
+  useEffect(() => {
+    extensionItemsRef.current =
+      authenticated && credentials.length > 0 ? toExtensionItems(credentials) : [];
+  }, [authenticated, credentials]);
+
+  /**
+   * Sincroniza la bóveda desbloqueada con la extensión Arca Shield.
+   * La copia desaparece en cuanto se cierra la sesión o se vacía la bóveda.
+   */
+  useEffect(() => {
+    if (authenticated) {
+      wasAuthenticatedRef.current = true;
+      if (credentials.length > 0) publishVault(toExtensionItems(credentials));
+      else clearVault();
+    } else if (wasAuthenticatedRef.current) {
+      wasAuthenticatedRef.current = false;
+      clearVault();
+    }
+  }, [authenticated, credentials]);
+
+  /** Responde a las peticiones de sincronización que envía la extensión. */
+  useEffect(() => installExtensionBridge(() => extensionItemsRef.current), []);
+
+  /** Borra la copia de la extensión al cerrar o recargar la pestaña de la bóveda. */
+  useEffect(() => {
+    const handlePageHide = () => clearVault();
+    window.addEventListener("pagehide", handlePageHide);
+    return () => window.removeEventListener("pagehide", handlePageHide);
+  }, []);
 
   /** Marca la sesión como abierta y carga los blobs de la bóveda para descifrarlos. */
   async function unlockVault() {
@@ -928,6 +976,7 @@ function App() {
       setIsAccountModalOpen(false);
       setSelectedCredentialId(null);
       setDeletePassword("");
+      setDeleteConfirmOpen(false);
       setView("login");
       setShowAccess(true);
       addToast("Cuenta eliminada permanentemente.", "success");
@@ -1036,10 +1085,12 @@ function App() {
     setIsAccountModalOpen(false);
     setError("");
     setDeletePassword("");
+    setDeleteConfirmOpen(false);
   }
   function openAccountModal() {
     setError("");
     setDeletePassword("");
+    setDeleteConfirmOpen(false);
     setIsAccountModalOpen(true);
   }
   function openNewCredentialModal() {
@@ -1219,6 +1270,11 @@ function App() {
         onSubmitPassword={handleChangePassword}
         deletePassword={deletePassword}
         onDeletePasswordChange={setDeletePassword}
+        deleteConfirmOpen={deleteConfirmOpen}
+        onDeleteConfirmOpenChange={(open) => {
+          setDeleteConfirmOpen(open);
+          if (open) setDeletePassword("");
+        }}
         onDeleteConfirm={handleDeleteAccount}
         isDeleting={isDeletingAccount}
         deleteError={error}

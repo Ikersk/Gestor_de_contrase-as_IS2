@@ -189,6 +189,47 @@ test('blocks the sixth failed login attempt', async () => {
   assert.equal(responses[5].status, 429);
 });
 
+// El registro tambien esta limitado: sin limite seria un oraculo de enumeracion
+// de emails (409 en duplicado) y un vector de agotamiento de CPU (bcrypt cost 12).
+test('blocks the sixth registration attempt', async () => {
+  const app = createApp({ dbPool: makePool() });
+
+  const responses = [];
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    responses.push(
+      await request(app).post('/api/auth/register').send(validRegistration(`bulk-${attempt}@example.com`)),
+    );
+  }
+
+  assert.deepEqual(responses.slice(0, 5).map((response) => response.status),
+    [201, 201, 201, 201, 201]);
+  assert.equal(responses[5].status, 429);
+});
+
+// Los fallos de transporte responden JSON: nunca el HTML con stack trace del
+// manejador por defecto de Express.
+test('answers with JSON for malformed bodies, oversized bodies and unknown routes', async () => {
+  const app = createApp({ dbPool: makePool() });
+
+  const broken = await request(app)
+    .post('/api/auth/login')
+    .set('Content-Type', 'application/json')
+    .send('{"email": ');
+  assert.equal(broken.status, 400);
+  assert.match(broken.headers['content-type'], /application\/json/);
+
+  const oversized = await request(app)
+    .post('/api/auth/login')
+    .send({ email: 'a'.repeat(2 * 1024 * 1024) });
+  assert.equal(oversized.status, 413);
+  assert.match(oversized.headers['content-type'], /application\/json/);
+
+  const missing = await request(app).get('/api/does-not-exist');
+  assert.equal(missing.status, 404);
+  assert.match(missing.headers['content-type'], /application\/json/);
+  assert.deepEqual(missing.body, { error: 'Not found' });
+});
+
 // Verifica que los cuerpos invalidos fallan con 400 en lugar de producir un error interno.
 test('rejects malformed registration and login payloads with 400', async () => {
   const app = createApp({ dbPool: makePool() });

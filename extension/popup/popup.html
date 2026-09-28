@@ -24,6 +24,29 @@
     </header>
 
     <main class="popup-body">
+      <!-- Interruptor rápido de autocompletado -->
+      <section class="autofill-switch-row">
+        <div class="autofill-switch-text">
+          <span class="section-label">Autocompletado</span>
+          <span id="autofill-switch-hint" class="autofill-switch-hint">
+            Iconos, popover y relleno en este navegador
+          </span>
+        </div>
+        <button
+          id="autofill-switch"
+          class="autofill-switch"
+          type="button"
+          role="switch"
+          aria-checked="true"
+          aria-label="Activar o desactivar el autocompletado"
+        >
+          <span id="autofill-switch-state" class="autofill-switch__state">ON</span>
+          <span class="autofill-switch__track" aria-hidden="true">
+            <span class="autofill-switch__thumb"></span>
+          </span>
+        </button>
+      </section>
+
       <section class="site-card">
         <span class="section-label">Sitio Web Activo</span>
         <div id="site-domain" class="site-domain">Cargando dominio...</div>
@@ -67,6 +90,20 @@
         <button id="btn-unlock-popup" class="btn-unlock-popup" type="button">
           Abrir e Iniciar Sesión en Arca
         </button>
+      </section>
+
+      <!-- Estado: autocompletado apagado por el usuario -->
+      <section id="autofill-disabled-section" class="vault-locked-section hidden">
+        <div class="locked-icon-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+            <line x1="12" y1="2" x2="12" y2="12"/>
+          </svg>
+        </div>
+        <div class="locked-title">Autocompletado desactivado</div>
+        <p class="locked-desc">
+          Actívalo con el interruptor de arriba para ver y rellenar credenciales en esta página.
+        </p>
       </section>
 
       <!-- Sección de credenciales coincidentes para este dominio -->

@@ -154,18 +154,18 @@ describe("hibp", () => {
     });
 
     it("handles partial API failures gracefully", async () => {
-      let callCount = 0;
+      // Las peticiones de un mismo lote van en paralelo: la respuesta se decide
+      // por el prefijo de la URL, nunca por el orden de llegada (flaky si no).
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
+        vi.fn().mockImplementation((url: string) => {
+          if (url.includes("/5BAA6")) {
             return Promise.resolve({
               ok: true,
               text: () => Promise.resolve(`${KNOWN_SHA1.slice(5)}:100`),
             });
           }
-          // Second call fails
+          // El resto de consultas fallan
           return Promise.resolve({ ok: false, status: 500 });
         })
       );

@@ -15,33 +15,33 @@ El proyecto **Arca** se rige de forma estricta por los tres pilares de evaluaci�
 
 ---
 
-## 2. Matriz de Seguimiento y Trazabilidad en Rama de Producción (`main`)
+## 2. Matriz de Seguimiento y Trazabilidad en la Rama Actual de Desarrollo
 
-A continuación se detalla el estado real de integración de cada mejora dentro de la rama principal de producción (`main`), contrastado con el código fuente actual y las ramas de desarrollo:
+A continuación se detalla el estado real de integración de cada mejora, contrastado con el código fuente actual de la rama de desarrollo (`develop`, que está por delante de `main`). **Las ramas y commits citados en versiones anteriores de este informe (`feature/zero-knowledge-security-enhancements`, `59d6ff4`) no existen en el repositorio; las referencias han sido corregidas.**
 
-| ID | Mejora / Feature | Componente | Estado en `main` | Ubicación del Código | Acción para Completar en `main` |
+| ID | Mejora / Feature | Componente | Estado actual | Ubicación del Código | Acción para Completar |
 | :--- | :--- | :--- | :---: | :--- | :--- |
-| **M1** | Zeroización Segura de Memoria (`secureZeroize`) | Frontend (`client/src/auth.ts`) | ❌ **Pendiente** | Rama local `feature/zero-knowledge-security-enhancements` | Implementar `buffer.fill(0)` en `logoutFromMemory`, `changeMasterPassword`, `deleteAccountFromPassword` y buffers intermedios. |
-| **M2** | Bloqueo Automático por Inactividad (15 min) | Frontend (`client/src/main.tsx`) | ❌ **Pendiente** | Rama local `feature/zero-knowledge-security-enhancements` | Integrar listener de actividad de usuario y temporizador de 15 min que ejecute `logoutFromMemory()`. |
-| **M3** | Medidor de Entropía Criptográfica NIST SP 800-63B | Frontend (`validation.ts` y `main.tsx`) | ❌ **Pendiente** | Rama local `feature/zero-knowledge-security-enhancements` | Añadir función `calculatePasswordEntropy` y barra de progreso de entropía visual en tiempo real en el registro. |
-| **M4** | Cabeceras HTTP Enterprise (Helmet HSTS, COOP, CORP) | Backend (`server/src/app.js`) | ⚠️ **Parcial** | Parcial en `main` (solo CSP básico) / Completo en `feature/...` | Agregar directivas `crossOriginOpenerPolicy`, `crossOriginResourcePolicy`, `referrerPolicy` y directivas `hsts` enterprise. |
-| **M5** | Protección Fuerza Bruta & Almacén Ciego ZK | Backend (`server/src/routes/auth.js`) | ✅ **Activo** | Rama `main` (commit `82e2f8e`) | Ya integrado y probado: Rate limiting (5 req/15min), fake salt HMAC, dummy hash timing protection y aislamiento por `user_id`. |
-| **M6** | Suite de Auditoría de Invariantes ZK & MitM | Tests (`zero-knowledge-audit.test.ts`) | ❌ **Pendiente** | Rama local `feature/zero-knowledge-security-enhancements` | Portar archivo de pruebas `client/src/crypto/zero-knowledge-audit.test.ts` (eleva de 44 a 49 tests frontend). |
-| **M7** | Escudo Anti-Phishing & Extensión Guard (1Password/Bitwarden) | Fullstack & Extensión (`anti-phishing.ts`, `extension/`) | ✅ **Activo** | `client/src/anti-phishing.ts`, `CredentialDetail.tsx`, `extension/` | Análisis homográfico, typosquatting Levenshtein, bloqueo de autocompletado y modal de advertencia roja. |
+| **M1** | Zeroización Segura de Memoria (`secureZeroize`) | Frontend (`client/src/auth.ts`) | ❌ **Pendiente** | No implementado (`auth.ts` solo asigna `vaultKey = null`) | Implementar `buffer.fill(0)` en `logoutFromMemory`, `changeMasterPassword`, `deleteAccountFromPassword` y buffers intermedios. |
+| **M2** | Bloqueo Automático por Inactividad (15 min) | Frontend (`client/src/main.tsx`) | ❌ **Pendiente** | No implementado | Integrar listener de actividad de usuario y temporizador de 15 min que ejecute el cierre de sesión en memoria. |
+| **M3** | Medidor de Entropía Criptográfica NIST SP 800-63B | Frontend (`validation.ts` y `main.tsx`) | ✅ **Completada** | `client/src/validation.ts` (`evaluatePasswordProtocol`), `client/src/PasswordProtocolMeter.tsx`, usado en `main.tsx` (registro, cambio de contraseña y credenciales) | — |
+| **M4** | Cabeceras HTTP Enterprise (Helmet HSTS, COOP, CORP) | Backend (`server/src/app.js`) | ⚠️ **Parcial** | `server/src/app.js` (CSP estricta sí; COOP/CORP/ReferrerPolicy/HSTS explícito no) | Agregar directivas `crossOriginOpenerPolicy`, `crossOriginResourcePolicy`, `referrerPolicy` y `hsts`. |
+| **M5** | Protección Fuerza Bruta & Almacén Ciego ZK | Backend (`server/src/routes/auth.js`) | ✅ **Activo** | `server/src/routes/auth.js` | Ya integrado y probado: rate limiting 5/15 min en register, salt, login, change-password, delete-account y MFA, fake salt HMAC, dummy hash timing protection y aislamiento por `user_id`. |
+| **M6** | Suite de Auditoría de Invariantes ZK & MitM | Tests (`zero-knowledge-audit.test.ts`) | ❌ **Pendiente** | No existe el fichero `client/src/crypto/zero-knowledge-audit.test.ts` | Crear la suite (derivación nativa, aislamiento split-key, MitM, manipulación de 1 bit en AEAD). |
+| **M7** | Escudo Anti-Phishing & Extensión Guard (1Password/Bitwarden) | Fullstack & Extensión (`anti-phishing.ts`, `extension/`) | ✅ **Activo** | `client/src/anti-phishing.ts`, `client/src/vault/CredentialDetailPanel.tsx`, `extension/` | Análisis homográfico, typosquatting Levenshtein, bloqueo de autocompletado y modal de advertencia roja. |
 | **M+** | Adaptador Base de Datos Local SQLite para Pruebas | Backend (`local-db.js` / `db.js`) | ❌ **Retirado** | `server/src/db.js` (adaptador eliminado) | El adaptador SQLite (`local-db.js`) y el switch `isLocalDb` se retiraron: el proyecto usa exclusivamente Supabase y `db.js` valida `DATABASE_URL` al cargar. |
 
 ---
 
 ## 3. Catálogo de Mejoras y Justificación Técnica
 
-A continuación se detalla cada mejora, acompañada de su justificación criptográfica, vector de amenaza mitigado, cumplimiento con las normas del sistema y su estado actual en la rama `main`:
+A continuación se detalla cada mejora, acompañada de su justificación criptográfica, vector de amenaza mitigado, cumplimiento con las normas del sistema y su estado actual en el código:
 
 ---
 
 ### 🛡️ MEJORA 1 (Frontend): Zeroización Segura de Memoria (`Secure Memory Zeroization / Wiping`)
-> **Estado en `main`:** ❌ **PENDIENTE DE INTEGRACIÓN**  
-> *Ubicación del código fuente:* Rama `feature/zero-knowledge-security-enhancements` (Commit `59d6ff4`).  
-> *Situación actual:* En `main`, `client/src/auth.ts` únicamente asigna `vaultKey = null;`, dejando que el Garbage Collector gestione la memoria sin sobrescribir los buffers binarios previamente.
+> **Estado:** ❌ **PENDIENTE**  
+> *Ubicación del código fuente:* No implementado (en versiones anteriores de este informe se citaba una rama/commit inexistentes).  
+> *Situación actual:* `client/src/auth.ts` únicamente asigna `vaultKey = null;`, dejando que el Garbage Collector gestione la memoria sin sobrescribir los buffers binarios previamente.
 
 #### • Descripción Técnica:
 En entornos JavaScript/TypeScript que se ejecutan sobre el motor V8, las variables asignadas a buffers binarios (`Uint8Array`) pueden permanecer indefinidamente en el *Heap* de memoria hasta que el recolector de basura (*Garbage Collector*) las reclame.
@@ -67,9 +67,9 @@ Esta función se ejecuta de forma síncrona en los siguientes eventos:
 ---
 
 ### ⏱️ MEJORA 2 (Frontend): Bloqueo Automático por Inactividad (`Auto-Lock on Idle`)
-> **Estado en `main`:** ❌ **PENDIENTE DE INTEGRACIÓN**  
-> *Ubicación del código fuente:* Rama `feature/zero-knowledge-security-enhancements` (Commit `59d6ff4`).  
-> *Situación actual:* En `main`, `client/src/main.tsx` no posee el temporizador reactivo de 15 minutos ni los listeners de interacción del usuario.
+> **Estado:** ❌ **PENDIENTE**  
+> *Ubicación del código fuente:* No implementado (en versiones anteriores de este informe se citaba una rama/commit inexistentes).  
+> *Situación actual:* `client/src/main.tsx` no posee el temporizador reactivo de 15 minutos ni los listeners de interacción del usuario.
 
 #### • Descripción Técnica:
 Se integró un detector de inactividad reactivo en el ciclo de vida de la aplicación (`useEffect` en `client/src/main.tsx`) que escucha eventos de interacción del usuario (`mousedown`, `keydown`, `scroll`, `touchstart`).
@@ -86,9 +86,9 @@ Se integró un detector de inactividad reactivo en el ciclo de vida de la aplica
 ---
 
 ### 📊 MEJORA 3 (Frontend): Medidor de Entropía Criptográfica en Tiempo Real (NIST SP 800-63B)
-> **Estado en `main`:** ❌ **PENDIENTE DE INTEGRACIÓN**  
-> *Ubicación del código fuente:* Rama `feature/zero-knowledge-security-enhancements` (Commit `59d6ff4`).  
-> *Situación actual:* En `main`, `client/src/validation.ts` solo comprueba longitud mínima y máxima sin calcular bits de entropía ni ofrecer feedback visual de fortaleza.
+> **Estado:** ✅ **COMPLETADA E INTEGRADA**  
+> *Ubicación del código fuente:* `client/src/validation.ts` (`evaluatePasswordProtocol`), `client/src/PasswordProtocolMeter.tsx` y su uso en `client/src/main.tsx` (registro, cambio de contraseña maestra y formulario de credenciales).  
+> *Situación actual:* implementado y cubierto por `validation.test.ts`.
 
 #### • Descripción Técnica:
 Se implementó en `client/src/validation.ts` la función `calculatePasswordEntropy(password)` basada en el modelo matemático de espacio de búsqueda de NIST SP 800-63B:
@@ -113,9 +113,9 @@ La interfaz de usuario (`AuthPanel`) muestra una barra de progreso dinámica y e
 ---
 
 ### 🌐 MEJORA 4 (Backend): Endurecimiento de Cabeceras HTTP Enterprise (Helmet HSTS & Isolation)
-> **Estado en `main`:** ⚠️ **PARCIALMENTE INTEGRADO**  
-> *Ubicación del código fuente:* Presente parcialmente en `main` (`server/src/app.js`); directivas completas en `feature/zero-knowledge-security-enhancements`.  
-> *Situación actual:* En `main`, `app.js` tiene CSP estricto configurado, pero faltan las directivas `crossOriginOpenerPolicy`, `crossOriginResourcePolicy`, `referrerPolicy` y la configuración explícita de `hsts`.
+> **Estado:** ⚠️ **PARCIALMENTE INTEGRADO**  
+> *Ubicación del código fuente:* `server/src/app.js`.  
+> *Situación actual:* `app.js` tiene CSP estricta configurada, pero faltan las directivas `crossOriginOpenerPolicy`, `crossOriginResourcePolicy`, `referrerPolicy` y la configuración explícita de `hsts`.
 
 #### • Descripción Técnica:
 Se configuró en `server/src/app.js` un conjunto estricto de políticas de aislamiento de origen y transporte seguro:
@@ -154,12 +154,12 @@ app.use(helmet({
 ---
 
 ### 🚦 MEJORA 5 (Backend): Protección contra Fuerza Bruta & Almacén Ciego Indestructible
-> **Estado en `main`:** ✅ **COMPLETAMENTE INTEGRADO Y ACTIVO EN PRODUCCIÓN**  
-> *Ubicación del código fuente:* En `main` (`server/src/routes/auth.js` y `server/src/routes/vault.js`).  
-> *Situación actual:* Rate limiters activos (5 req/15min), fake salt HMAC para correos inexistentes, hash simulado de bcrypt contra timing attacks y aislamiento estricto por `user_id`.
+> **Estado:** ✅ **COMPLETAMENTE INTEGRADO Y ACTIVO**  
+> *Ubicación del código fuente:* `server/src/routes/auth.js` y `server/src/routes/vault.js`.  
+> *Situación actual:* Rate limiters activos (5 req/15 min) en los 8 endpoints sensibles, fake salt HMAC para correos inexistentes, hash simulado de bcrypt contra timing attacks y aislamiento estricto por `user_id`.
 
 #### • Descripción Técnica:
-- Limitadores de tasa (`express-rate-limit`) independientes para `/api/auth/login`, `/api/auth/salt`, `/api/auth/change-password` y `/api/auth/delete-account` (máximo 5 intentos por ventana de 15 minutos).
+- Limitadores de tasa (`express-rate-limit`) independientes para `POST /api/auth/register`, `GET /api/auth/salt`, `POST /api/auth/login`, `POST /api/auth/change-password`, `DELETE /api/auth/account` y los endpoints MFA (`verify`, `setup`/`enable`, `disable`) — máximo 5 intentos por ventana de 15 minutos.
 - En `/api/auth/salt`, ante usuarios inexistentes, se devuelve un salt simulado derivado de `HMAC-SHA256(JWT_SECRET, email)`.
 - En `/api/auth/login`, ante usuarios inexistentes, se ejecuta una verificación real con `bcrypt.compare` contra `DUMMY_AUTH_HASH` para eliminar canales laterales de tiempo (*Timing Attacks*).
 - En `/api/vault`, las peticiones son estrictamente aisladas por `user_id` verificado desde el JWT firmado (`HS256` con secreto de $\ge 32\text{ bytes}$).
@@ -171,12 +171,12 @@ app.use(helmet({
 ---
 
 ### 🧪 MEJORA 6 (Pruebas Automatizadas): Suite de Auditoría de Invariantes Zero-Knowledge (`zero-knowledge-audit.test.ts`)
-> **Estado en `main`:** ❌ **PENDIENTE DE INTEGRACIÓN**  
-> *Ubicación del código fuente:* Rama `feature/zero-knowledge-security-enhancements` (Commit `59d6ff4`).  
-> *Situación actual:* En `main`, actualmente se ejecutan 33 tests en Vitest sin incluir aún las 4 pruebas de auditoría de invariantes ZK, ataques MitM y manipulación de 1 bit en AEAD.
+> **Estado:** ❌ **PENDIENTE**  
+> *Ubicación del código fuente:* No existe el fichero `client/src/crypto/zero-knowledge-audit.test.ts`.  
+> *Situación actual:* la suite de frontend son **88 tests en 11 ficheros** (vectores NIST, auth, HIBP, TOTP, anti-phishing, extensión, etc.) sin incluir aún las 4 pruebas de auditoría de invariantes ZK, ataques MitM y manipulación de 1 bit en AEAD.
 
 #### • Descripción Técnica:
-Se creó el archivo de pruebas automatizadas [`client/src/crypto/zero-knowledge-audit.test.ts`](file:///c:/Users/Alejandra/Desktop/Gestor_de_contrase-as_IS2/client/src/crypto/zero-knowledge-audit.test.ts) que evalúa y certifica 4 invariantes críticas:
+Se pretende crear el archivo de pruebas automatizadas `client/src/crypto/zero-knowledge-audit.test.ts` que evalúa y certifica 4 invariantes críticas:
 1. **Invariante 1:** Verificación de derivación nativa con `Web Crypto API` (claves de 256 bits).
 2. **Invariante 2:** Aislamiento estadístico Split-Key entre `EncryptionKey` y `AuthHash`.
 3. **Invariante 3:** Simulación de ataque MitM donde se demuestra que capturar todos los paquetes HTTP de red no permite descifrar la bóveda.
@@ -185,9 +185,9 @@ Se creó el archivo de pruebas automatizadas [`client/src/crypto/zero-knowledge-
 ---
 
 ### 🛡️ MEJORA 7: Escudo Anti-Phishing Criptográfico & Extensión de Navegador Guard (1Password / Bitwarden)
-> **Estado en `main`:** ✅ **COMPLETAMENTE INTEGRADO Y OPERATIVO**  
-> *Ubicación del código fuente:* `client/src/anti-phishing.ts`, `client/src/anti-phishing.test.ts`, `client/src/CredentialDetail.tsx`, y directorio `extension/`.  
-> *Situación actual:* Módulo activo con 11 pruebas unitarias dedicadas. Detecta ataques homográficos/Punycode, typosquatting contra servicios oficiales y conexiones HTTP inseguras. Integra modal de advertencia roja con bloqueo de apertura y extensión Manifest V3 con bloqueo de autocompletado en el navegador.
+> **Estado:** ✅ **COMPLETAMENTE INTEGRADO Y OPERATIVO**  
+> *Ubicación del código fuente:* `client/src/anti-phishing.ts`, `client/src/anti-phishing.test.ts`, `client/src/vault/CredentialDetailPanel.tsx`, y directorio `extension/`.  
+> *Situación actual:* Módulo activo con **24 pruebas unitarias** dedicadas. Detecta ataques homográficos/Punycode, typosquatting contra servicios oficiales y conexiones HTTP inseguras. Integra modal de advertencia roja con bloqueo de apertura y extensión Manifest V3 con bloqueo de autocompletado en el navegador.
 
 #### • Descripción Técnica:
 Se implementó un sistema de defensa multicapa contra ataques de ingeniería social y suplantación de identidad:
@@ -195,7 +195,7 @@ Se implementó un sistema de defensa multicapa contra ataques de ingeniería soc
    - **Detección Homográfica (Punycode / Confusables):** Detecta dominios con prefijo internacional `xn--` o que inyectan caracteres de alfabetos cirílicos o griegos que imitan visualmente a caracteres latinos (ejemplo: `pаypal.com` donde la `а` es el punto de código cirílico `\u0430`).
    - **Detección Algorítmica de Typosquatting:** Primero valida si el dominio pertenece al catálogo oficial de servicios de alto impacto (PayPal, Google, Microsoft, Apple, Amazon, GitHub, Netflix, Twitch, bancos internacionales). Solo si no es oficial, compara la similitud normalizada (1 − Levenshtein/máx. longitud) tras normalizar sustituciones visuales (`0` por `o`, `1` por `l`, `rn` por `m`, `vv` por `w`): si la similitud es $\ge 0.70$, hay alias conocido o la marca va pegada a una palabra señuelo (`netflix-login`, `verify-paypal`), se cataloga como suplantación crítica. El umbral por similitud descarta falsos positivos de marcas distintas con letras parecidas (ej. `twitch.tv` no es imitación de `twitter.com`).
    - **Evaluación de Transporte Seguro:** Identifica enlaces que no utilicen HTTPS y alerta sobre el riesgo de ataques *Man-in-the-Middle* en redes abiertas.
-2. **Escudo de Navegación Segura en la Bóveda (`CredentialDetail.tsx`):**
+2. **Escudo de Navegación Segura en la Bóveda (`client/src/vault/CredentialDetailPanel.tsx`):**
    - Cada enlace en las credenciales muestra un badge dinámico (`🛡️ Seguro`, `⚠️ HTTP Inseguro`, `🚨 Posible Phishing`).
    - Si el enlace es catalogado como peligroso, el gestor intercepta el clic y despliega un **Modal de Advertencia Roja** detallando el dominio clonado, el servicio oficial imitado y los caracteres engañosos detectados, bloqueando la navegación a menos que el usuario confirme explícitamente el riesgo.
 3. **Extensión de Navegador (WebExtension Manifest V3 en `extension/`):**
@@ -211,33 +211,50 @@ Se implementó un sistema de defensa multicapa contra ataques de ingeniería soc
 
 ## 4. Matriz Comparativa de Estado Antes vs Después
 
-| Componente | Estado Anterior | Estado Actual (Con Mejoras) | Impacto de Seguridad | Estado en `main` |
+| Componente | Estado Anterior | Estado Actual (Con Mejoras) | Impacto de Seguridad | Estado actual |
 | :--- | :--- | :--- | :--- | :---: |
-| **Gestión de Memoria RAM** | Asignación y liberación estándar por GC (`vaultKey = null`). | **Zeroización forzada síncrona (`vaultKey.fill(0)`)** en todas las salidas. | Evita recuperación forense de claves en RAM. | ❌ Pendiente |
-| **Sesión Desatendida** | La sesión permanecía activa mientras la pestaña estuviese abierta. | **Bloqueo automático por inactividad (15 min)** con purga de RAM. | Mitiga accesos físicos no autorizados. | ❌ Pendiente |
-| **Creación de Contraseña Maestra** | Validación básica de longitud ($\ge 12$). | **Medidor de Entropía NIST SP 800-63B en tiempo real con feedback visual**. | Impide contraseñas débiles vulnerables a fuerza bruta offline. | ❌ Pendiente |
-| **Cabeceras HTTP del Servidor** | Helmet estándar con CSP básico. | **Helmet Enterprise con HSTS (1 año), COOP, CORP y No-Referrer**. | Previene SSL Stripping y aísla el entorno de ejecución. | ⚠️ Parcial |
-| **Protección contra Fuerza Bruta** | Sin limitadores estrictos. | **Rate limiting independiente, fake salt HMAC y dummy compare**. | Evita ataques de fuerza bruta y enumeración de usuarios. | ✅ Activo |
-| **Auditoría Automatizada** | Tests funcionales de endpoints. | **Suite dedicada de invariantes Zero-Knowledge y pruebas MitM**. | Certificación continua de cumplimiento de especificación. | ❌ Pendiente |
+| **Gestión de Memoria RAM** | Asignación y liberación estándar por GC (`vaultKey = null`). | *Pendiente:* zeroización forzada síncrona (`vaultKey.fill(0)`) en todas las salidas. | Evita recuperación forense de claves en RAM. | ❌ Pendiente |
+| **Sesión Desatendida** | La sesión permanecía activa mientras la pestaña estuviese abierta. | *Pendiente:* bloqueo automático por inactividad (15 min) con purga de RAM. | Mitiga accesos físicos no autorizados. | ❌ Pendiente |
+| **Creación de Contraseña Maestra** | Validación básica de longitud ($\ge 12$). | **Medidor de Entropía NIST SP 800-63B en tiempo real con feedback visual**. | Impide contraseñas débiles vulnerables a fuerza bruta offline. | ✅ Completada |
+| **Cabeceras HTTP del Servidor** | Helmet estándar con CSP básico. | *Parcial:* CSP estricta activa; faltan HSTS explícito, COOP, CORP y No-Referrer. | Previene SSL Stripping y aísla el entorno de ejecución. | ⚠️ Parcial |
+| **Protección contra Fuerza Bruta** | Sin limitadores estrictos. | **Rate limiting en 8 endpoints, fake salt HMAC y dummy compare**. | Evita ataques de fuerza bruta y enumeración de usuarios. | ✅ Activo |
+| **Auditoría Automatizada** | Tests funcionales de endpoints. | *Pendiente:* suite dedicada de invariantes Zero-Knowledge y pruebas MitM. | Certificación continua de cumplimiento de especificación. | ❌ Pendiente |
 | **Protección Anti-Phishing** | Sin inspección de dominios; apertura directa de cualquier enlace. | **Escudo criptográfico homográfico/typosquatting + Extensión de bloqueo de autocompletado**. | Previene robo de credenciales en páginas clonadas o falsas. | ✅ Activo |
-| **Persistencia Local para Tests** | Dependencia obligatoria de Supabase externo. | **Adaptador local SQLite transparente (`USE_LOCAL_DB=true`)**. | ~~Permite desarrollo y pruebas 100% offline sin infraestructura externa.~~ Retirado: se decidió usar solo la BD de Supabase. | ❌ Retirado |
+| **Persistencia Local para Tests** | Dependencia obligatoria de Supabase externo. | ~~Adaptador local SQLite (`USE_LOCAL_DB=true`)~~ Retirado: se decidió usar solo la BD de Supabase. | — | ❌ Retirado |
 
 ---
 
 ## 5. Resultados de Verificación y Compilación
 
-### Estado Actual en la Rama `main`:
-- **Tests de Frontend en `main`:** **44 / 44 tests PASADOS exitosamente** (`vitest` - 9 archivos de test).
-- **Tests de Backend en `main`:** **10 / 10 tests PASADOS exitosamente** (`node --test`).
-- **Build de Producción:** Compilación limpia con Vite + TypeScript (`npm --prefix client run build`) sin advertencias ni errores en 817ms.
-- **Extensión de Navegador:** Empaquetada y lista para cargar en modo desarrollador (`extension/`).
+### Estado actual (verificado el 28/09/2026 sobre `develop`)
+- **Tests de Frontend:** **88 / 88 tests PASADOS** (`vitest run` — 11 archivos de test).
+- **Tests de Backend:** **21 / 21 tests PASADOS** (`node --test` — auth, mfa y vault).
+- **Build de Producción:** `tsc -b && vite build` compila sin errores ni avisos, con generación automática de hashes SRI SHA-384 en `dist/index.html`.
+- **Extensión de Navegador:** lista para cargar en modo desarrollador desde `extension/`.
 
-### Meta tras Integrar las Mejoras Pendientes (Rama `feature/...`):
-- **Tests de Frontend Meta:** **49 / 49 tests PASADOS** (incluyendo los 5 tests de invariantes ZK).
-- **Tests de Backend Meta:** **10 / 10 tests PASADOS**.
+### Meta tras integrar las mejoras pendientes
+- **Tests de Frontend Meta:** 88 + los tests de la suite M6 (invariantes ZK / MitM).
+- **Tests de Backend:** se mantienen en 21 (salvo que M4 añada tests de cabeceras).
 
 ---
 
-## 6. Dictamen Final
+## 6. Hallazgos de la Revisión General (pendientes, de menor gravedad)
 
-Las mejoras aplicadas elevan la robustez del sistema a los más altos estándares de la industria, garantizando que el diseño del gestor de contraseñas **Arca** sea **matemáticamente invulnerable ante intermediarios (MitM), brechas de base de datos, ataques homográficos de phishing o intentos de inspección de servidor**. Al culminar la integración de las mejoras M1, M2, M3, M4 y M6 en `main`, la rama de producción contará con la cobertura completa de seguridad enterprise descrita en este documento.
+Detectados durante la auditoría de cumplimiento zero-knowledge. Ninguno rompe el modelo ZK, pero conviene tenerlos en el backlog:
+
+1. **Enumeración por `kdfIterations` en `/salt`**: el salt falso devuelve siempre 600.000 iteraciones (`routes/auth.js`); si alguna cuenta real usara otras iteraciones, la respuesta distinguiría cuentas existentes.
+2. **Reuso de `JWT_SECRET` como clave HMAC del salt falso** (`createFakeSalt`): mejoraría una variable dedicada (`FAKE_SALT_KEY`) para separar dominios criptográficos.
+3. **`mfa/disable` no consume `mfa_last_counter`**: dentro de la misma ventana de 30 s, un código TOTP ya gastado en el login podría reutilizarse para desactivar el MFA (requiere además cookie de sesión válida).
+4. **`GET /api/vault` sin paginación**: la respuesta crece linealmente con la bóveda (solo el request está limitado a 2 MB).
+5. **`DB_SSL_REJECT_UNAUTHORIZED=false` en `.env.example`**: desactiva la validación de certificado hacia PostgreSQL; aceptable en desarrollo sobre Supabase, debe ser `true` en producción con CA propia.
+6. **Dependencias con `"latest"`** en `package.json` (server y client): instalar sin `package-lock.json` puede traer versiones distintas a las auditadas.
+7. **`extension-autofill.test.ts` prueba una copia local** del código de la extensión en vez de importarlo: puede dar falsos positivos si `extension/` cambia.
+8. **Fallback a `chrome.storage.local`** en `extension/background.js` para navegadores sin `chrome.storage.session`: en esos navegadores las credenciales descifradas tocarían disco.
+9. **Rate limiting por IP sin `TRUST_PROXY`**: detrás de un proxy inverso debe configurarse la variable (ya implementada como opt-in) o todos los usuarios compartirán contador.
+10. **El CAPTCHA Proof-of-Work no se valida en el servidor**: es mitigación de cliente; la defensa real del backend es el rate limiting.
+
+---
+
+## 7. Dictamen Final
+
+Las mejoras aplicadas elevan la robustez del sistema, garantizando que el diseño del gestor de contraseñas **Arca** resista ataques de intermediarios (MitM), brechas de base de datos, ataques homográficos de phishing e inspección de servidor dentro de los límites descritos en las "Limitaciones conocidas" del README. Al culminar la integración de las mejoras **M1, M2, M4 y M6** (M3 ya está completa), el proyecto dispondrá de la cobertura completa de seguridad descrita en este documento.
