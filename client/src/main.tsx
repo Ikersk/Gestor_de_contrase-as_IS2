@@ -20,7 +20,13 @@ import "./styles.css";
 import { Landing } from "./landing/Landing";
 import { TextureLayers } from "./landing/TextureLayers";
 import { ThemeSwitcher } from "./ThemeSwitcher";
-import { FIELD_LIMITS, evaluatePasswordProtocol } from "./validation";
+import {
+  FIELD_LIMITS,
+  MASTER_PASSWORD_REQUIREMENTS,
+  evaluatePasswordProtocol,
+  validateEmail,
+  validateMasterPassword,
+} from "./validation";
 import { PasswordProtocolMeter } from "./PasswordProtocolMeter";
 import { CaptchaBox } from "./CaptchaBox";
 import { analyzeUrl } from "./anti-phishing";
@@ -431,6 +437,9 @@ function AuthPanel({
   // El protocolo de contraseña segura (minúscula, mayúscula, número, carácter especial, 12 car.)
   // solo se exige al crear cuenta. En login el usuario ya la tiene validada desde el registro.
   const registerPasswordInvalid = isRegister && masterPassword.length > 0 && !evaluatePasswordProtocol(masterPassword, 12).isValid;
+  // En login solo se valida la longitud (sin bloquear el envío); el protocolo completo es solo de registro.
+  const loginPasswordInvalid = !isRegister && masterPassword.length > 0 && validateMasterPassword(masterPassword) !== null;
+  const passwordRequirementsInvalid = registerPasswordInvalid || loginPasswordInvalid;
   const submitDisabled =
     busy ||
     !isCaptchaVerified ||
@@ -481,7 +490,7 @@ function AuthPanel({
           Crear cuenta
         </button>
       </div>
-      <form className="auth-form" onSubmit={onSubmit}>
+      <form className="auth-form" onSubmit={onSubmit} noValidate>
         <label htmlFor="email">Correo electrónico</label>
         <input
           id="email"
@@ -527,6 +536,13 @@ function AuthPanel({
             )}
           </button>
         </div>
+
+        {/* Aviso explícito con todos los requisitos cuando la contraseña maestra no es válida */}
+        {passwordRequirementsInvalid && (
+          <p className="feedback error" role="alert">
+            {MASTER_PASSWORD_REQUIREMENTS}
+          </p>
+        )}
 
         {/* Medidor de protocolo de seguridad y entropía: solo en registro, no en login */}
         {isRegister && <PasswordProtocolMeter password={masterPassword} minLength={12} />}
@@ -733,6 +749,14 @@ function App() {
       return;
     }
 
+    // El formulario usa noValidate, así que la validación de campos se hace aquí.
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      setBusy(false);
+      return;
+    }
+
     // El protocolo de contraseña segura se valida SOLO en registro (cero conocimiento).
     // En login nunca se re-valida la entropía: el servidor deriva las claves del hash
     // sin conocer nunca el texto plano de la contraseña maestra.
@@ -740,8 +764,15 @@ function App() {
       const protocol = evaluatePasswordProtocol(masterPassword, 12);
       if (!protocol.isValid) {
         setError(
-          `La contraseña maestra debe cumplir el protocolo de seguridad: ${protocol.errors[0]}`
+          `${MASTER_PASSWORD_REQUIREMENTS} No se cumple: ${protocol.errors.join(", ")}.`
         );
+        setBusy(false);
+        return;
+      }
+    } else {
+      const passwordError = validateMasterPassword(masterPassword);
+      if (passwordError) {
+        setError(masterPassword ? MASTER_PASSWORD_REQUIREMENTS : passwordError);
         setBusy(false);
         return;
       }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FIELD_LIMITS,
+  MASTER_PASSWORD_REQUIREMENTS,
   evaluatePasswordProtocol,
   validateCredential,
   validateEmail,
@@ -66,6 +67,15 @@ describe('form validation limits', () => {
     expect(validateSecurePassword('')).toBeTruthy();
     expect(validateSecurePassword('solo_letras_largas_aqui', 12)).toContain('protocolo de seguridad');
     expect(validateSecurePassword('Arca#MasterKey99!', 12)).toBeNull();
+  });
+
+  it('explains every master password requirement in the explicit message', () => {
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('no es válida');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('entre 12 y 42 caracteres');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('minúscula (a-z)');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('mayúscula (A-Z)');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('número (0-9)');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('carácter especial');
   });
 
   it('limits credential fields and only accepts HTTP URLs', () => {

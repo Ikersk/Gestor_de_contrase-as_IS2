@@ -15,6 +15,13 @@ export const FIELD_LIMITS = {
 // Comprueba una forma básica de correo sin intentar implementar toda la especificación RFC.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Mensaje explícito con todos los requisitos de la contraseña maestra, mostrado en login y registro.
+export const MASTER_PASSWORD_REQUIREMENTS =
+  'La contraseña maestra no es válida. Debe cumplir todas estas condiciones: ' +
+  `tener entre 12 y ${FIELD_LIMITS.masterPassword} caracteres, ` +
+  'al menos una letra minúscula (a-z), al menos una letra mayúscula (A-Z), ' +
+  'al menos un número (0-9) y al menos un carácter especial (!@#$%...).';
+
 export interface ValidatableCredential {
   title: string;
   username: string;
