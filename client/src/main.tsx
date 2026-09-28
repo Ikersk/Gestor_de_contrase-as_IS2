@@ -986,15 +986,6 @@ function App() {
     setBusy(true);
     setError("");
 
-    const protocol = evaluatePasswordProtocol(credential.password, 8);
-    if (!protocol.isValid) {
-      setError(
-        `La contraseña del acceso debe cumplir el protocolo de seguridad: ${protocol.errors[0]}`
-      );
-      setBusy(false);
-      return;
-    }
-
     for (const url of credential.urls) {
       if (url && url.trim().length > 3) {
         const report = analyzeUrl(url.trim());
