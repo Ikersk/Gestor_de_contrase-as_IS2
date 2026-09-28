@@ -698,6 +698,20 @@ function App() {
     }
   }, [authenticated, decrypting, credentials.length]);
 
+  useEffect(() => {
+    const modal = credentialModalRef.current;
+    if (!modal) return;
+    if (isCredentialModalOpen && !modal.open) modal.showModal();
+    if (!isCredentialModalOpen && modal.open) modal.close();
+  }, [isCredentialModalOpen]);
+
+  useEffect(() => {
+    const modal = deleteConfirmModalRef.current;
+    if (!modal) return;
+    if (deletingId !== null && !modal.open) modal.showModal();
+    if (deletingId === null && modal.open) modal.close();
+  }, [deletingId]);
+
   /** Marca la sesión como abierta y carga los blobs de la bóveda para descifrarlos. */
   async function unlockVault() {
     setAuthenticated(true);
