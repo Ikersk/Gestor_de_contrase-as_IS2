@@ -1426,7 +1426,8 @@ h1, h2, h3 {
 
 /* ── SHA-256 Proof of Work CAPTCHA ── */
 
-/* Contenedor principal — minimalista, sin decoración innecesaria */
+/* Contenedor principal — minimalista, sin decoración innecesaria.
+   Altura fija para que el bloque no cambie de tamaño entre estados. */
 .pow-wrap {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1435,6 +1436,10 @@ h1, h2, h3 {
   margin-top: 10px;
   margin-bottom: 14px;
   transition: border-color 220ms ease;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 /* ── Estado idle: botón trigger ── */
@@ -1486,7 +1491,7 @@ h1, h2, h3 {
 
 /* ── Estado computing ── */
 .pow-computing-row {
-  padding: 10px 14px 0;
+  padding: 0 14px;
   display: flex;
   align-items: center;
   gap: 10px;

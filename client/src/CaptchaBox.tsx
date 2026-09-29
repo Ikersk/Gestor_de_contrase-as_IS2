@@ -120,16 +120,10 @@ function generateChallenge(bytes = 16): string {
   return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function fmtNum(n: number): string {
-  return n.toLocaleString('es-ES');
-}
-
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function CaptchaBox({ onVerifyChange, className = '' }: CaptchaBoxProps) {
   const [phase, setPhase] = useState<'idle' | 'computing' | 'verified'>('idle');
-  const [attempts, setAttempts] = useState(0);
-  const [timeMs, setTimeMs] = useState(0);
   const [challenge, setChallenge] = useState('');
   const workerRef = useRef<Worker | null>(null);
   const blobUrlRef = useRef<string>('');
@@ -147,8 +141,6 @@ export function CaptchaBox({ onVerifyChange, className = '' }: CaptchaBoxProps) 
     terminate();
     setChallenge(generateChallenge());
     setPhase('idle');
-    setAttempts(0);
-    setTimeMs(0);
     onVerifyChange(false);
   }, [onVerifyChange]);
 
@@ -161,7 +153,6 @@ export function CaptchaBox({ onVerifyChange, className = '' }: CaptchaBoxProps) 
     if (phase !== 'idle' || !challenge) return;
 
     setPhase('computing');
-    setAttempts(0);
 
     const blob = new Blob([WORKER_CODE], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
@@ -171,11 +162,7 @@ export function CaptchaBox({ onVerifyChange, className = '' }: CaptchaBoxProps) 
     workerRef.current = worker;
 
     worker.onmessage = ({ data }: MessageEvent) => {
-      if (data.type === 'progress') {
-        setAttempts(data.attempts);
-      } else if (data.type === 'solved') {
-        setAttempts(data.attempts);
-        setTimeMs(data.timeMs);
+      if (data.type === 'solved') {
         setPhase('verified');
         onVerifyChange(true);
         terminate();
@@ -215,7 +202,6 @@ export function CaptchaBox({ onVerifyChange, className = '' }: CaptchaBoxProps) 
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           </svg>
           <span>Verificar que soy humano</span>
-          <span className="pow-algo-tag">SHA-256</span>
         </button>
       )}
 
@@ -223,13 +209,6 @@ export function CaptchaBox({ onVerifyChange, className = '' }: CaptchaBoxProps) 
       {phase === 'computing' && (
         <div className="pow-computing-row" aria-live="polite">
           <span className="pow-spinner" aria-hidden="true" />
-          <div className="pow-computing-info">
-            <span className="pow-computing-label">Calculando prueba criptográfica…</span>
-            <span className="pow-computing-count">{fmtNum(attempts)} hashes SHA-256</span>
-          </div>
-          <div className="pow-bar-track" role="progressbar" aria-label="Progreso de verificación">
-            <div className="pow-bar-fill" />
-          </div>
         </div>
       )}
 
@@ -243,9 +222,6 @@ export function CaptchaBox({ onVerifyChange, className = '' }: CaptchaBoxProps) 
           </div>
           <div className="pow-verified-info">
             <span className="pow-verified-label">Verificado</span>
-            <span className="pow-verified-meta">
-              {fmtNum(attempts)} hashes · {timeMs} ms · {DIFFICULTY} bits SHA-256
-            </span>
           </div>
           <button
             type="button"
