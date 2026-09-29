@@ -31,6 +31,8 @@ const SALT_BYTES = 16;
 const JWT_COOKIE_NAME = 'session';
 const MFA_COOKIE_NAME = 'mfa';
 const MFA_COOKIE_TTL_MS = 5 * 60 * 1000; // El reto intermedio caduca rapido a proposito.
+// Ventana para confirmar el alta del MFA tras escanear el QR; mas alla se purga el secreto pendiente.
+const MFA_SETUP_TTL_MS = 15 * 60 * 1000;
 const DUMMY_AUTH_HASH = bcrypt.hashSync('dummy-auth-hash', 12);
 
 /** Normaliza el identificador de cuenta para que el email sea insensible a mayusculas. */
@@ -311,6 +313,22 @@ function createAuthRouter({ dbPool }) {
     }
 
     try {
+      // El secreto pendiente caduca a los 15 minutos. La purga se hace aqui,
+      // fuera de la transaccion, para que su ROLLBACK no la deshaga; la guarda
+      // mfa_enabled = FALSE evita borrar el secreto de una cuenta que confirme
+      // el alta en otra peticion concurrente. rowCount > 0 significa que el
+      // setup estaba caducado y acaba de descartarse.
+      const expired = await dbPool.query(
+        `UPDATE users SET mfa_secret = NULL, mfa_setup_at = NULL
+         WHERE id = $1 AND mfa_enabled = FALSE AND mfa_secret IS NOT NULL
+           AND (mfa_setup_at IS NULL OR mfa_setup_at < $2)
+         RETURNING id`,
+        [request.user.id, new Date(Date.now() - MFA_SETUP_TTL_MS)],
+      );
+      if (expired.rowCount > 0) {
+        return response.status(409).json({ error: 'MFA setup is not pending' });
+      }
+
       const outcome = await withTransaction(dbPool, async (client) => {
         const result = await client.query(
           'SELECT id, email, mfa_secret, mfa_enabled FROM users WHERE id = $1 FOR UPDATE',

@@ -77,8 +77,20 @@ function makePool() {
           const user = findById(params[1]);
           user.mfa_secret = params[0];
           user.mfa_last_counter = 0;
-          user.mfa_setup_at = '2026-01-01 00:00:00';
+          user.mfa_setup_at = new Date().toISOString();
           return { rows: [], rowCount: 1 };
+        }
+        // Purga del setup caducado en /mfa/enable: solo secretos pendientes
+        // mas viejos que el corte (params[1]); replica AND mfa_enabled = FALSE.
+        if (q.includes('mfa_secret = NULL, mfa_setup_at = NULL')) {
+          const user = findById(params[0]);
+          const stale = Boolean(user) && !user.mfa_enabled && user.mfa_secret
+            && (!user.mfa_setup_at || new Date(user.mfa_setup_at) < params[1]);
+          if (stale) {
+            user.mfa_secret = null;
+            user.mfa_setup_at = null;
+          }
+          return { rows: [], rowCount: stale ? 1 : 0 };
         }
         if (q.includes('mfa_enabled = TRUE')) {
           const user = findById(params[0]);
@@ -320,6 +332,32 @@ test('runs the full MFA lifecycle from setup to disable', async () => {
   const loginAfter = await request(app).post('/api/auth/login').send({ email: 'life@example.com', authHash: AUTH_HASH });
   assert.equal(loginAfter.status, 200);
   assert.deepEqual(loginAfter.body, { wrappedVaultKey: WRAPPED_VAULT_KEY, wrapIv: WRAP_IV });
+});
+
+// Un setup pendiente fuera de la ventana de 15 minutos se rechaza y su secreto se purga.
+test('rejects and purges an expired pending MFA setup', async () => {
+  const pool = makePool();
+  seedUser(pool, 'stale@example.com');
+  const app = createApp({ dbPool: pool });
+  const cookie = sessionCookie(1);
+
+  const setup = await request(app).post('/api/auth/mfa/setup').set('Cookie', [cookie]);
+  assert.equal(setup.status, 200);
+  // Envejece el secreto pendiente mas alla de la ventana de confirmacion.
+  const user = pool.users.get('stale@example.com');
+  user.mfa_setup_at = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+  const enabled = await request(app)
+    .post('/api/auth/mfa/enable')
+    .set('Cookie', [cookie])
+    .send({ code: currentTotpCode(setup.body.secret) });
+  assert.equal(enabled.status, 409);
+  assert.equal(enabled.body.error, 'MFA setup is not pending');
+  // El secreto caducado desaparece de la BD sin activar el MFA ni tocar la sesion.
+  assert.equal(user.mfa_secret, null);
+  assert.equal(user.mfa_setup_at, null);
+  assert.equal(user.mfa_enabled, false);
+  assert.equal(user.session_version, 0);
 });
 
 // Un backup code permite entrar una sola vez y luego queda agotado.
