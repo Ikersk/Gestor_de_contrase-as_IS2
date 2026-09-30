@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   FIELD_LIMITS,
+  MASTER_PASSWORD_REQUIREMENTS,
+  evaluatePasswordProtocol,
   validateCredential,
   validateEmail,
   validateMasterPassword,
+  validateSecurePassword,
+  validateMfaCode,
 } from './validation';
 
 // Las pruebas cubren los límites que también debe respetar el formulario visible.
@@ -18,6 +22,60 @@ describe('form validation limits', () => {
     expect(validateMasterPassword('short')).toBeTruthy();
     expect(validateMasterPassword('a'.repeat(FIELD_LIMITS.masterPassword + 1))).toBeTruthy();
     expect(validateMasterPassword('a'.repeat(12))).toBeNull();
+  });
+
+  it('evaluates password protocol and entropy accurately in real time', () => {
+    // Caso vacío
+    const emptyResult = evaluatePasswordProtocol('', 12);
+    expect(emptyResult.isValid).toBe(false);
+    expect(emptyResult.hasMinLength).toBe(false);
+    expect(emptyResult.hasLower).toBe(false);
+    expect(emptyResult.hasUpper).toBe(false);
+    expect(emptyResult.hasNumber).toBe(false);
+    expect(emptyResult.hasSpecial).toBe(false);
+    expect(emptyResult.entropy).toBe(0);
+    expect(emptyResult.level).toBe('muy-debil');
+
+    // Caso solo minúsculas (incompleto)
+    const lowerOnly = evaluatePasswordProtocol('solominusculas', 12);
+    expect(lowerOnly.isValid).toBe(false);
+    expect(lowerOnly.hasLower).toBe(true);
+    expect(lowerOnly.hasUpper).toBe(false);
+    expect(lowerOnly.hasNumber).toBe(false);
+    expect(lowerOnly.hasSpecial).toBe(false);
+    expect(lowerOnly.errors.length).toBeGreaterThan(0);
+
+    // Caso que cumple todo el protocolo de Arca (minúscula, mayúscula, número, especial, >=12 caracteres)
+    const strongPass = evaluatePasswordProtocol('Arca$Segura2026!', 12);
+    expect(strongPass.isValid).toBe(true);
+    expect(strongPass.hasMinLength).toBe(true);
+    expect(strongPass.hasLower).toBe(true);
+    expect(strongPass.hasUpper).toBe(true);
+    expect(strongPass.hasNumber).toBe(true);
+    expect(strongPass.hasSpecial).toBe(true);
+    expect(strongPass.entropy).toBeGreaterThanOrEqual(75);
+    expect(['fuerte', 'excelente']).toContain(strongPass.level);
+    expect(strongPass.errors).toHaveLength(0);
+
+    // Caso credencial de bóveda (mínimo 8 caracteres)
+    const vaultPass = evaluatePasswordProtocol('P@ssw0rd99', 8);
+    expect(vaultPass.isValid).toBe(true);
+    expect(vaultPass.hasMinLength).toBe(true);
+  });
+
+  it('validates secure passwords and provides descriptive error messages', () => {
+    expect(validateSecurePassword('')).toBeTruthy();
+    expect(validateSecurePassword('solo_letras_largas_aqui', 12)).toContain('protocolo de seguridad');
+    expect(validateSecurePassword('Arca#MasterKey99!', 12)).toBeNull();
+  });
+
+  it('explains every master password requirement in the explicit message', () => {
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('no es válida');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('entre 12 y 42 caracteres');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('minúscula (a-z)');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('mayúscula (A-Z)');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('número (0-9)');
+    expect(MASTER_PASSWORD_REQUIREMENTS).toContain('carácter especial');
   });
 
   it('limits credential fields and only accepts HTTP URLs', () => {
@@ -37,5 +95,21 @@ describe('form validation limits', () => {
     expect(validateCredential({ ...valid, totpSecret: 'JBSW Y3DP EHPK 3PXP' })).toBeNull();
     expect(validateCredential({ ...valid, totpSecret: 'otpauth://totp/Arca:demo?secret=JBSWY3DPEHPK3PXP' })).toBeNull();
     expect(validateCredential({ ...valid, totpSecret: 'not-valid' })).toBeTruthy();
+  });
+});
+
+// El campo MFA acepta tanto el código TOTP del authenticator como un backup code.
+describe('MFA code validation', () => {
+  it('accepts 6-digit TOTP codes and formatted backup codes only', () => {
+    expect(validateMfaCode('')).toBeTruthy();
+    expect(validateMfaCode('12345')).toBeTruthy();
+    expect(validateMfaCode('abcdef')).toBeTruthy();
+    expect(validateMfaCode('123456')).toBeNull();
+    expect(validateMfaCode('1234567')).toBeTruthy();
+    expect(validateMfaCode('abcdefgh')).toBeNull();
+    expect(validateMfaCode('ABCD-EFGH')).toBeNull();
+    expect(validateMfaCode('abcd-efgh')).toBeNull();
+    expect(validateMfaCode('ABC2-7FGH')).toBeNull();
+    expect(validateMfaCode('ABCD-EFG')).toBeTruthy();
   });
 });

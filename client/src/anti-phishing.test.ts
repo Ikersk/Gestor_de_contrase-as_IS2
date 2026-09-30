@@ -180,6 +180,67 @@ describe('Módulo Anti-Phishing y Análisis Criptográfico de URLs (Estándar Ar
     });
   });
 
+  describe('Falsos positivos: dominios legítimos que no deben bloquearse', () => {
+    it('certifica twitch.tv como oficial y no lo confunde con twitter.com', () => {
+      const report = analyzeUrl('https://www.twitch.tv/directory');
+      expect(report.riskLevel).toBe('safe');
+      expect(report.isOfficialVerified).toBe(true);
+      expect(report.isTyposquatting).toBe(false);
+      expect(report.canDirectOpen).toBe(true);
+    });
+
+    it('no marca dominios legítimos como imitación de otra marca', () => {
+      const legitUrls = [
+        'https://dropbox.com/home',
+        'https://box.com/login',
+        'https://max.com/watch',
+        'https://xbox.com/es',
+        'https://gitlab.com/explore',
+        'https://googleapis.com',
+        'https://googletagmanager.com',
+        'https://googlemail.com',
+        'https://pineapple.com',
+        'https://chats.com',
+        'https://reddit.com',
+        'https://zoom.us',
+        'https://notion.so',
+        'https://slack.com',
+        'https://mi-portal-bancario.com/login',
+      ];
+
+      for (const url of legitUrls) {
+        const report = analyzeUrl(url);
+        expect(report.riskLevel, `${url} -> ${report.threatTitle}`).not.toBe('danger');
+        expect(report.isTyposquatting).toBe(false);
+      }
+    });
+
+    it('sigue detectando typosquatting real y señuelos de marca', () => {
+      const dangerousUrls = [
+        'https://twich.tv',
+        'https://twtch.tv',
+        'https://twitchh.tv',
+        'https://twitch-login.com',
+        'https://netfilx.com',
+        'https://netfilx-login.com',
+        'https://netflixlogin.com',
+        'https://paypal-secure.com',
+        'https://verifypaypal.com',
+        'https://twitter-login.com',
+        'https://x-login.com',
+        'https://google-support.com',
+        'https://twitch.xyz',
+      ];
+
+      for (const url of dangerousUrls) {
+        const report = analyzeUrl(url);
+        expect(report.riskLevel, `${url} -> ${report.threatTitle}`).toBe('danger');
+        expect(report.isTyposquatting).toBe(true);
+        expect(report.canDirectOpen).toBe(false);
+      }
+    });
+  });
+
   describe('Reglas de Autocompletado Seguro (matchesAutofillDomain)', () => {
     it('permite autocompletado si los dominios base coinciden (eTLD+1 match)', () => {
       const result = matchesAutofillDomain(

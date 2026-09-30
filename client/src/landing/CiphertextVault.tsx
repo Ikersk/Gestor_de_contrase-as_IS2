@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 type CipherState = { iv: string; ciphertext: string } | null;
 
+const MAX_LENGTH = 50;
+
 /** Demo en vivo de AES-GCM: cifra el input con Web Crypto y muestra ciphertext/IV. */
 function CryptoDemo() {
   const [input, setInput] = useState("");
@@ -42,17 +44,21 @@ function CryptoDemo() {
   return (
     <div className="space-y-4">
       <label
-        className="block font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-blue-electric"
+        className="flex items-baseline justify-between font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-blue-electric"
         htmlFor="demo-input"
       >
         Texto plano
+        <span className="text-ink-faint">
+          {input.length}/{MAX_LENGTH}
+        </span>
       </label>
       <input
         id="demo-input"
         type="text"
         placeholder="Escribe un secreto para cifrar…"
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onChange={(e) => setInput(e.target.value.slice(0, MAX_LENGTH))}
+        maxLength={MAX_LENGTH}
         autoComplete="off"
         spellCheck={false}
         className="w-full rounded-lg border border-line bg-[var(--lp-demo-input)] px-3.5 py-3 font-mono text-sm text-ink placeholder:text-ink-faint/70 outline-none transition focus:border-blue-electric/70 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.18)]"

@@ -30,7 +30,7 @@ Al final de cada fase hay un prompt sugerido, listo para copiar y pegar.
 | Derivación de claves (cliente) | **PBKDF2-SHA256** vía `crypto.subtle` nativo | Evita instalar Argon2 en WASM en el navegador. Sube a Argon2id (con `hash-wasm`) como mejora opcional en la Fase 7 si quieres más puntos de innovación. |
 | Cifrado de datos | **AES-GCM 256** vía `crypto.subtle` nativo | Nativo del navegador, autenticado (integridad + confidencialidad). |
 | Separación de claves | **HKDF** vía `crypto.subtle` nativo | Deriva Encryption Key y Auth Hash del mismo Master Key sin que uno revele el otro. |
-| TOTP/2FA | **otpauth** (biblioteca npm) | Generación de códigos TOTP estándar RFC 6238 para autenticación de dos factores en credenciales. |
+| TOTP/2FA | **otpauth** (biblioteca npm) | Generación de códigos TOTP estándar RFC 6238: MFA de cuenta al iniciar sesión y TOTP por credencial. |
 | Detección de brechas | **Have I Been Pwned** (API k-Anonymity) | Verificación automática de contraseñas comprometidas sin revelar las contraseñas al servidor. |
 | Sesión | **Cookie httpOnly + JWT** (`jsonwebtoken`) | Evita que un XSS pueda robar el token desde `localStorage`. |
 | Seguridad HTTP | **helmet**, **express-rate-limit**, **cors** | CSP, límite de intentos de login, control de origen. |
@@ -48,18 +48,24 @@ password-manager-zk/
 │   ├── src/
 │   │   ├── db.js              # pool PostgreSQL + acceso a la base
 │   │   ├── routes/
-│   │   │   ├── auth.js        # register, salt, login, logout, change-password, delete-account
+│   │   │   ├── auth.js        # register, salt, login, logout, change-password, delete-account, MFA
 │   │   │   └── vault.js       # CRUD de blobs cifrados
 │   │   ├── middleware/
-│   │   │   └── requireAuth.js
+│   │   │   ├── requireAuth.js
+│   │   │   └── requireMfaPending.js  # valida la cookie intermedia del reto MFA
+│   │   ├── totp-secret.js     # generar/cifrar/verificar secretos TOTP del MFA
+│   │   ├── mfa-backup-codes.js # 10 códigos de respaldo bcrypt de un solo uso
 │   │   ├── validation.js      # schemas Zod para todos los endpoints
 │   │   ├── migrate.js         # migración idempotente del esquema
-│   │   └── app.js             # Express + helmet + cors + rutas
+│   │   ├── seed.js            # cuentas de prueba (CLI, opcional)
+│   │   └── app.js             # Express + helmet + cors + handler JSON de errores + rutas
 │   ├── sql/
 │   │   ├── 001_initial_schema.sql
-│   │   └── 002_session_version.sql
+│   │   ├── 002_session_version.sql
+│   │   └── 003_mfa_totp.sql
 │   ├── test/
 │   │   ├── auth.test.js
+│   │   ├── mfa.test.js
 │   │   └── vault.test.js
 │   ├── .env.example
 │   └── package.json
@@ -71,21 +77,30 @@ password-manager-zk/
 │   │   │   ├── cipher.js       # encryptItem/decryptItem
 │   │   │   ├── crypto.test.js
 │   │   │   └── nist-vectors.test.js
-│   │   ├── api.ts              # cliente HTTP (register, login, vault CRUD, etc.)
-│   │   ├── auth.ts             # lógica de autenticación (register, login, changePassword, deleteAccount)
+│   │   ├── vault/              # UI de la bóveda (3 columnas)
+│   │   │   ├── VaultShell.tsx / VaultSidebar.tsx
+│   │   │   ├── CredentialList.tsx (métricas de seguridad)
+│   │   │   ├── CredentialDetailPanel.tsx / CredentialCard.tsx
+│   │   │   └── TotpBlock.tsx / CopyButton.tsx / StrengthMatrix.tsx / ScrambleText.tsx
+│   │   ├── landing/            # landing page
+│   │   ├── api.ts              # cliente HTTP (register, login, vault CRUD, MFA, etc.)
+│   │   ├── auth.ts             # lógica de autenticación (register, login, changePassword, deleteAccount, MFA)
 │   │   ├── hibp.ts             # Have I Been Pwned (k-Anonymity)
 │   │   ├── totp.ts             # generación de códigos TOTP
+│   │   ├── anti-phishing.ts    # detección de dominios suplantados
+│   │   ├── extension-bridge.ts # puente bóveda → extensión (postMessage del mismo origen)
 │   │   ├── password-generator.ts # generador seguro de contraseñas
-│   │   ├── validation.ts       # validación de campos en cliente
+│   │   ├── validation.ts       # validación de campos en cliente (límites + entropía)
 │   │   ├── vault.ts            # interfaces Credential, DecryptedCredential
 │   │   ├── vault-health.ts     # auditoría de salud de la bóveda
-│   │   ├── main.tsx            # app React principal (AuthPanel, VaultView, AccountModal, etc.)
-│   │   ├── SecurityDashboard.tsx # panel de métricas de seguridad
-│   │   ├── CredentialDetail.tsx  # vista de detalle de credencial
-│   │   └── styles.css          # estilos globales
-│   ├── .env.example
+│   │   ├── main.tsx            # app React principal
+│   │   ├── MfaSettings.tsx / MfaChallenge.tsx / CaptchaBox.tsx
+│   │   ├── PasswordProtocolMeter.tsx / ThemeSwitcher.tsx
+│   │   ├── styles.css          # estilos globales
+│   │   └── *.test.ts           # 9 ficheros de test (auth, hibp, totp, etc.)
 │   └── package.json
-└── PLAN.md                     # este archivo
+├── extension/                   # extensión de navegador MV3 (Arca Shield)
+└── PLAN.md                      # este archivo
 ```
 
 ---
@@ -124,13 +139,18 @@ sobre el contenido real de los elementos cifrados.
 
 | Método | Ruta | Body | Auth | Devuelve |
 |---|---|---|---|---|
-| GET | `/api/health` | — | No | `200 { status: "ok" }` |
+| GET | `/health` | — | No | `200 { status: "ok" }` |
 | POST | `/api/auth/register` | `{email, kdfSalt, kdfIterations, authHash, wrappedVaultKey, wrapIv}` | No | `201` |
 | GET | `/api/auth/salt?email=` | — | No (rate-limited fuerte) | `{kdfSalt, kdfIterations}` |
-| POST | `/api/auth/login` | `{email, authHash}` | No | Cookie httpOnly + `{wrappedVaultKey, wrapIv}` |
+| POST | `/api/auth/login` | `{email, authHash}` | No | Cookie httpOnly + `{wrappedVaultKey, wrapIv}`; con MFA activo: `200 {mfaRequired: true}` + cookie `mfa` (5 min) y **sin** `wrappedVaultKey` |
+| POST | `/api/auth/mfa/verify` | `{code}` | Cookie `mfa` | Cookie de sesión + `{wrappedVaultKey, wrapIv, usedBackupCode?}` |
+| GET | `/api/auth/mfa/status` | — | Sí | `{enabled}` |
+| POST | `/api/auth/mfa/setup` | — | Sí | `{secret, otpauthUri}` (secreto cifrado con `TOTP_ENC_KEY`) |
+| POST | `/api/auth/mfa/enable` | `{code}` | Sí | `200 {backupCodes: [10]}` + cookie re-firmada (`session_version +1`) |
+| POST | `/api/auth/mfa/disable` | `{code}` | Sí | `204` + cookie re-firmada (`session_version +1`) |
 | POST | `/api/auth/logout` | — | Sí | `204` |
-| POST | `/api/auth/change-password` | `{currentAuthHash, kdfSalt, kdfIterations, authHash, wrappedVaultKey, wrapIv}` | Sí | `200` + cookie cleared |
-| DELETE | `/api/auth/account` | `{authHash}` | Sí | `200` + cookie cleared |
+| POST | `/api/auth/change-password` | `{currentAuthHash, kdfSalt, kdfIterations, authHash, wrappedVaultKey, wrapIv}` | Sí | `204` + cookie cleared |
+| DELETE | `/api/auth/account` | `{authHash}` | Sí | `204` + cookie cleared |
 | GET | `/api/vault` | — | Sí | `[{id, iv, ciphertext, createdAt}]` |
 | POST | `/api/vault` | `{iv, ciphertext}` | Sí | `{id}` |
 | PUT | `/api/vault/:id` | `{iv, ciphertext}` | Sí | `204` |
@@ -159,7 +179,7 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 **Login:**
 1. `GET /api/auth/salt?email=` → `{kdfSalt, kdfIterations}`
 2. Repetir pasos 1-3 del registro con el salt recibido.
-3. `POST /api/auth/login {email, authHash}` → servidor verifica con `argon2.verify`, responde con cookie de sesión + `{wrappedVaultKey, wrapIv}`.
+3. `POST /api/auth/login {email, authHash}` → servidor verifica con `bcrypt.compare` (cost 12), responde con cookie de sesión + `{wrappedVaultKey, wrapIv}`. Con MFA activo solo responde `{mfaRequired: true}` y una cookie `mfa` de 5 minutos.
 4. Cliente desenvuelve: `vaultKey = AES-GCM-decrypt(encryptionKey, wrapIv, wrappedVaultKey)`. Esta clave vive solo en memoria (variable JS, nunca `localStorage`).
 
 **Guardar un item:**
@@ -186,10 +206,10 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 > **Prompt:** "Implementa el flujo criptográfico de la sección 5, exclusivamente en `client/src/crypto/`, sin ninguna llamada de red todavía. Usa `crypto.subtle` nativo. Escribe tests con Vitest para cada función."
 
 ### Fase 2 — Backend: registro y login
-**Tareas:** rutas `auth.js`, `argon2` para rehash del authHash, JWT en cookie httpOnly, rate limiting en `/api/auth/login` y `/api/auth/salt`.
+**Tareas:** rutas `auth.js`, `bcryptjs` para rehash del authHash, JWT en cookie httpOnly, rate limiting en `/api/auth/login` y `/api/auth/salt`.
 **Criterio de aceptación:** con Postman/curl, registrar un usuario y hacer login funciona; 6 intentos fallidos de login bloquean temporalmente.
 
-> **Prompt:** "Implementa `/api/auth/register`, `/api/auth/salt` y `/api/auth/login` según la sección 4. Usa argon2 para rehashear el authHash antes de guardarlo. Sesión vía cookie httpOnly + JWT firmado. Rate limit de 5 intentos por 15 minutos en login."
+> **Prompt:** "Implementa `/api/auth/register`, `/api/auth/salt` y `/api/auth/login` según la sección 4. Usa bcryptjs (cost 12) para rehashear el authHash antes de guardarlo. Sesión vía cookie httpOnly + JWT firmado. Rate limit de 5 intentos por 15 minutos en login."
 
 ### Fase 3 — Frontend: registro y login conectados
 **Tareas:** formularios simples, integrar los módulos de crypto de la Fase 1 con las llamadas HTTP.
@@ -235,7 +255,8 @@ Importante: el registro genera el salt **en el cliente**, no en el servidor. As�
 - [x] `SELECT * FROM users` y `SELECT * FROM vault_items` no revelan nada legible.
 - [x] IVs nunca se reutilizan (verificado por test).
 - [x] Auth Hash y Encryption Key derivan de contextos HKDF distintos.
-- [x] Rate limiting activo en login, salt, change-password y delete-account.
+- [x] Rate limiting activo en register, login, salt, change-password, delete-account y endpoints MFA (verify, setup/enable, disable).
+- [x] MFA TOTP (RFC 6238) solo al iniciar sesión: secreto cifrado con AES-GCM (`TOTP_ENC_KEY`), anti-replay por time-step en `mfa_last_counter`, ventana ±1 periodo y 10 códigos de respaldo bcrypt (cost 12) de un solo uso.
 - [x] CSP sin `unsafe-inline`/`unsafe-eval`.
 - [x] Cookie de sesión `httpOnly`, `Secure`, `SameSite=Strict`.
 - [x] Vectores NIST pasando.

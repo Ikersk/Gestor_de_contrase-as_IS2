@@ -21,6 +21,10 @@ Implementa la misma arquitectura de seguridad activa utilizada por gestores ente
    - Muestra una alerta visible directamente en la parte superior del sitio web alertando al usuario de la amenaza.
 6. **Popup Interactivo:**
    - Informa el estado de seguridad de la pestaña, si utiliza protocolo HTTPS o HTTP, y provee acceso directo a la Bóveda Arca (`http://localhost:5173`).
+7. **Interruptor Rápido de Autocompletado:**
+   - Botón ON/OFF en la cabecera del popup que apaga o activa todo el autocompletado (iconos en los campos, popover, relleno automático y sugerencias) en todas las pestañas de inmediato.
+   - Mientras está en `OFF`, el badge del icono pasa a mostrarse en gris con la etiqueta `OFF` (los avisos de phishing `!` y de HTTP tienen prioridad) y la extensión no entrega credenciales a ningún formulario.
+   - El estado se guarda como una única preferencia booleana (`autofill_enabled`) en `chrome.storage.local`; no se almacena ninguna credencial en disco.
 
 ---
 
@@ -33,8 +37,7 @@ Implementa la misma arquitectura de seguridad activa utilizada por gestores ente
    - En Brave: `brave://extensions`
 2. Activa el interruptor **"Modo de desarrollador"** (ubicado en la esquina superior derecha).
 3. Haz clic en el botón **"Cargar descomprimida"** (*Load unpacked*).
-4. Selecciona la carpeta `extension` ubicada en la raíz del proyecto:
-   `c:\Users\Alejandra\Desktop\Gestor_de_contrase-as_IS2\extension`
+4. Selecciona la carpeta `extension` ubicada en la raíz del proyecto (relativa a donde clonaste el repositorio), por ejemplo `<ruta-del-repositorio>/extension`.
 5. ¡Listo! Verás el icono del escudo **Arca Shield (🛡️)** en tu barra de extensiones.
 
 ---
@@ -49,3 +52,9 @@ Implementa la misma arquitectura de seguridad activa utilizada por gestores ente
    - El badge de la extensión cambiará a `HTTP` en color ámbar avisándote de la falta de cifrado en tránsito.
 3. **Prueba de Bloqueo de Phishing / Typosquatting:**
    - Si navegas a un dominio sospechoso o con sustitución de caracteres similar a una marca conocida, la extensión mostrará el badge rojo `!` y desplegará el banner de alerta bloqueando el autocompletado en los campos de contraseña.
+4. **Prueba del Interruptor de Autocompletado:**
+   - Abre el popup en una página con formulario de acceso y pulsa el interruptor **Autocompletado** para ponerlo en `OFF`.
+   - Los iconos de los campos desaparecen al instante, el badge del icono pasa a `OFF` en gris y el popup deja de listar credenciales (muestra *«Autocompletado desactivado»*).
+   - Vuelve a ponerlo en `ON` y todo se restaura sin recargar la página. El estado persiste tras cerrar y abrir el navegador.
+
+> **Importante:** tras modificar cualquier archivo de esta carpeta, recarga la extensión desde `chrome://extensions` y pulsa **F5** en las pestañas abiertas: los *content scripts* no se reinyectan solos.

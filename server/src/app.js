@@ -24,6 +24,21 @@ const port = Number(process.env.PORT || 3000);
 function createApp({ dbPool = pool } = {}) {
   const app = express();
 
+  // Detras de un proxy inverso (NGINX, load balancer) Express debe leer
+  // X-Forwarded-For para que request.ip (clave del rate limiting) sea la IP
+  // real del cliente y no la del proxy. Opt-in explicito via TRUST_PROXY
+  // ("1" para un proxy, "loopback", "true"...); por defecto desactivado,
+  // porque confiar en esa cabecera sin proxy permitiria evadir los limites
+  // enviando una IP falsa.
+  const trustProxySetting = process.env.TRUST_PROXY;
+  if (trustProxySetting && trustProxySetting !== 'false') {
+    const hops = Number(trustProxySetting);
+    const parsed = trustProxySetting === 'true'
+      ? true
+      : (Number.isNaN(hops) ? trustProxySetting : hops);
+    app.set('trust proxy', parsed);
+  }
+
   const frontendOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
   app.use(helmet({
     contentSecurityPolicy: {
@@ -62,6 +77,25 @@ function createApp({ dbPool = pool } = {}) {
   app.use('/api/auth', createAuthRouter({ dbPool }));
   // La boveda solo acepta peticiones con una sesion JWT valida.
   app.use('/api/vault', createVaultRouter({ dbPool }));
+
+  // Respuestas 404 en JSON: si no, el manejador por defecto de Express devuelve
+  // HTML y rompe el contrato JSON de la API.
+  app.use((_request, response) => {
+    response.status(404).json({ error: 'Not found' });
+  });
+
+  // Handler de errores global: body-parser (JSON roto o cuerpo > 2 MB) y
+  // cualquier error interno caen aqui en vez del generador HTML por defecto,
+  // que en desarrollo devolveria el stack trace como texto plano.
+  app.use((error, _request, response, _next) => {
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    if (status >= 500) {
+      console.error(error);
+    }
+    response.status(status).json({
+      error: status >= 500 ? 'Internal server error' : 'Invalid request payload',
+    });
+  });
 
   return app;
 }

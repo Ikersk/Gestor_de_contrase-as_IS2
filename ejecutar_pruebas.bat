@@ -52,8 +52,8 @@ echo.
 echo =======================================================================
 echo   CERTIFICACION EXITOSA: TODAS LAS PRUEBAS HAN SIDO SUPERADAS
 echo.
-echo   * Backend: 10/10 pruebas pasadas (Rate limit, CSP, Timing-Attack, ZK)
-echo   * Frontend: 44/44 pruebas pasadas (Anti-Phishing, NIST, HIBP, WebCrypto)
+echo   * Backend: 21/21 pruebas pasadas (Rate limit, CSP, Timing-Attack, MFA, ZK)
+echo   * Frontend: 88/88 pruebas pasadas en 11 ficheros (Anti-Phishing, NIST, HIBP, WebCrypto, Extension)
 echo   * Build: Compilacion de produccion limpia sin errores de tipos
 echo =======================================================================
 echo.

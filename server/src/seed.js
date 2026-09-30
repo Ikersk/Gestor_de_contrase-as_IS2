@@ -228,7 +228,10 @@ async function main() {
   }
 
   console.log(`\nListo: ${created} creadas, ${skipped} omitidas, ${itemsInserted} credenciales insertadas.`);
-  console.log(`Contraseña maestra común: ${MASTER_PASSWORD}`);
+  // Nunca imprimir la contraseña maestra por consola: los logs pueden quedar
+  // guardados en CI, terminales o ficheros de despliegue. Está definida arriba
+  // en la constante MASTER_PASSWORD de este script.
+  console.log('Contraseña maestra de las cuentas de prueba: ver constante MASTER_PASSWORD en este script.');
 }
 
 main()

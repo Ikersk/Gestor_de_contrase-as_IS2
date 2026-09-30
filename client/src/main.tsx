@@ -2,6 +2,7 @@ import { FormEvent, StrictMode, useCallback, useEffect, useMemo, useRef, useStat
 import { createRoot } from "react-dom/client";
 import {
   changeMasterPassword,
+  completeMfaLogin,
   deleteAccountFromPassword,
   loginWithMasterPassword,
   logoutFromMemory,
@@ -19,7 +20,15 @@ import "./styles.css";
 import { Landing } from "./landing/Landing";
 import { TextureLayers } from "./landing/TextureLayers";
 import { ThemeSwitcher } from "./ThemeSwitcher";
-import { FIELD_LIMITS } from "./validation";
+import {
+  FIELD_LIMITS,
+  MASTER_PASSWORD_REQUIREMENTS,
+  evaluatePasswordProtocol,
+  validateEmail,
+  validateMasterPassword,
+} from "./validation";
+import { PasswordProtocolMeter } from "./PasswordProtocolMeter";
+import { CaptchaBox } from "./CaptchaBox";
 import { analyzeUrl } from "./anti-phishing";
 import {
   DEFAULT_PASSWORD_CHARACTER_SELECTION,
@@ -31,8 +40,17 @@ import {
 } from "./password-generator";
 import { auditVault } from "./vault-health";
 import type { VaultHealthAlert } from "./vault-health";
+import {
+  clearVault,
+  installExtensionBridge,
+  publishVault,
+  toExtensionItems,
+} from "./extension-bridge";
+import type { ExtensionVaultItem } from "./extension-bridge";
 import { checkCredentialsBreach } from "./hibp";
 import { VaultShell } from "./vault/VaultShell";
+import { MfaChallenge } from "./MfaChallenge";
+import { MfaSettings } from "./MfaSettings";
 
 type View = "login" | "register";
 type Toast = { id: number; message: string; type: "success" | "error"; exiting?: boolean };
@@ -140,6 +158,8 @@ function AccountModal({
   onSubmitPassword,
   deletePassword,
   onDeletePasswordChange,
+  deleteConfirmOpen,
+  onDeleteConfirmOpenChange,
   onDeleteConfirm,
   isDeleting,
   deleteError,
@@ -150,12 +170,19 @@ function AccountModal({
   onSubmitPassword: (event: FormEvent<HTMLFormElement>) => void;
   deletePassword: string;
   onDeletePasswordChange: (value: string) => void;
+  deleteConfirmOpen: boolean;
+  onDeleteConfirmOpenChange: (open: boolean) => void;
   onDeleteConfirm: () => void;
   isDeleting: boolean;
   deleteError: string | null;
 }) {
   const modalRef = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const [newMasterPassword, setNewMasterPassword] = useState("");
+  const [showCurrentMasterPassword, setShowCurrentMasterPassword] = useState(false);
+  const [showNewMasterPassword, setShowNewMasterPassword] = useState(false);
+  const [showConfirmMasterPassword, setShowConfirmMasterPassword] = useState(false);
+  const [showDeletePassword, setShowDeletePassword] = useState(false);
 
   useEffect(() => {
     const modal = modalRef.current;
@@ -164,6 +191,11 @@ function AccountModal({
     if (!open && modal.open) {
       modal.close();
       formRef.current?.reset();
+      setNewMasterPassword("");
+      setShowCurrentMasterPassword(false);
+      setShowNewMasterPassword(false);
+      setShowConfirmMasterPassword(false);
+      setShowDeletePassword(false);
     }
   }, [open]);
 
@@ -183,42 +215,115 @@ function AccountModal({
         <h3 className="account-section-title">Cambiar contraseña maestra</h3>
         <form className="credential-form" ref={formRef} onSubmit={onSubmitPassword}>
           <label htmlFor="current-master-password">Contraseña actual</label>
-          <input
-            id="current-master-password"
-            name="currentPassword"
-            type="password"
-            autoComplete="current-password"
-            minLength={12}
-            maxLength={FIELD_LIMITS.masterPassword}
-            required
-          />
+          <div className="auth-password-wrapper">
+            <input
+              id="current-master-password"
+              name="currentPassword"
+              type={showCurrentMasterPassword ? "text" : "password"}
+              autoComplete="current-password"
+              minLength={12}
+              maxLength={FIELD_LIMITS.masterPassword}
+              required
+            />
+            <button
+              className="auth-eye-button"
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowCurrentMasterPassword(!showCurrentMasterPassword)}
+              aria-label={showCurrentMasterPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {showCurrentMasterPassword ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
+
           <label htmlFor="new-master-password">Nueva contraseña</label>
-          <input
-            id="new-master-password"
-            name="newPassword"
-            type="password"
-            autoComplete="new-password"
-            minLength={12}
-            maxLength={FIELD_LIMITS.masterPassword}
-            required
-          />
+          <div className="auth-password-wrapper">
+            <input
+              id="new-master-password"
+              name="newPassword"
+              type={showNewMasterPassword ? "text" : "password"}
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={FIELD_LIMITS.masterPassword}
+              value={newMasterPassword}
+              onChange={(e) => setNewMasterPassword(e.target.value)}
+              required
+            />
+            <button
+              className="auth-eye-button"
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowNewMasterPassword(!showNewMasterPassword)}
+              aria-label={showNewMasterPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {showNewMasterPassword ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
+          <PasswordProtocolMeter password={newMasterPassword} minLength={12} />
+
           <label htmlFor="confirm-master-password">
             Confirmar nueva contraseña
           </label>
-          <input
-            id="confirm-master-password"
-            name="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            minLength={12}
-            maxLength={FIELD_LIMITS.masterPassword}
-            required
-          />
+          <div className="auth-password-wrapper">
+            <input
+              id="confirm-master-password"
+              name="confirmPassword"
+              type={showConfirmMasterPassword ? "text" : "password"}
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={FIELD_LIMITS.masterPassword}
+              required
+            />
+            <button
+              className="auth-eye-button"
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowConfirmMasterPassword(!showConfirmMasterPassword)}
+              aria-label={showConfirmMasterPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            >
+              {showConfirmMasterPassword ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
           <button className="primary-button" type="submit" disabled={busy}>
             {busy ? "Actualizando..." : "Cambiar contraseña"}
           </button>
         </form>
       </div>
+
+      <MfaSettings />
 
       <div className="account-section danger-zone">
         <h3 className="danger-zone-title">Zona de Peligro</h3>
@@ -226,21 +331,43 @@ function AccountModal({
           Eliminar tu cuenta borrará permanentemente todos tus datos cifrados.
           Esta acción no se puede deshacer.
         </p>
-        {deletePassword !== "" ? (
+        {deleteConfirmOpen ? (
           <div className="delete-confirm-field">
             <label htmlFor="delete-confirm-password">
               Escribe tu contraseña actual para confirmar
             </label>
-            <input
-              id="delete-confirm-password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="Contraseña actual"
-              value={deletePassword}
-              onChange={(e) => onDeletePasswordChange(e.target.value)}
-              minLength={12}
-              maxLength={FIELD_LIMITS.masterPassword}
-            />
+            <div className="auth-password-wrapper">
+              <input
+                id="delete-confirm-password"
+                type={showDeletePassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="Contraseña actual"
+                value={deletePassword}
+                onChange={(e) => onDeletePasswordChange(e.target.value)}
+                minLength={12}
+                maxLength={FIELD_LIMITS.masterPassword}
+              />
+              <button
+                className="auth-eye-button"
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowDeletePassword(!showDeletePassword)}
+                aria-label={showDeletePassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showDeletePassword ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
             {deleteError && <p className="breach-error">{deleteError}</p>}
             <div className="confirm-actions">
               <button
@@ -254,7 +381,10 @@ function AccountModal({
               <button
                 className="secondary-button"
                 type="button"
-                onClick={() => onDeletePasswordChange("")}
+                onClick={() => {
+                  onDeletePasswordChange("");
+                  onDeleteConfirmOpenChange(false);
+                }}
               >
                 Cancelar
               </button>
@@ -264,7 +394,7 @@ function AccountModal({
           <button
             className="secondary-button delete-account-trigger"
             type="button"
-            onClick={() => onDeletePasswordChange(" ")}
+            onClick={() => onDeleteConfirmOpenChange(true)}
           >
             Eliminar Cuenta
           </button>
@@ -292,6 +422,8 @@ function AuthPanel({
   message,
   error,
   onSubmit,
+  isCaptchaVerified,
+  setIsCaptchaVerified,
 }: {
   view: View;
   setView: (view: View) => void;
@@ -309,12 +441,24 @@ function AuthPanel({
   message: string;
   error: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  isCaptchaVerified: boolean;
+  setIsCaptchaVerified: (verified: boolean) => void;
 }) {
   const isRegister = view === "register";
   const confirmDirty = confirmMasterPassword.length > 0;
   const passwordsMatch = confirmDirty && masterPassword === confirmMasterPassword;
   const passwordsMismatch = confirmDirty && masterPassword !== confirmMasterPassword;
-  const submitDisabled = busy || (isRegister && confirmDirty && !passwordsMatch);
+  // El protocolo de contraseña segura (minúscula, mayúscula, número, carácter especial, 12 car.)
+  // solo se exige al crear cuenta. En login el usuario ya la tiene validada desde el registro.
+  const registerPasswordInvalid = isRegister && masterPassword.length > 0 && !evaluatePasswordProtocol(masterPassword, 12).isValid;
+  // En login solo se valida la longitud (sin bloquear el envío); el protocolo completo es solo de registro.
+  const loginPasswordInvalid = !isRegister && masterPassword.length > 0 && validateMasterPassword(masterPassword) !== null;
+  const passwordRequirementsInvalid = registerPasswordInvalid || loginPasswordInvalid;
+  const submitDisabled =
+    busy ||
+    !isCaptchaVerified ||
+    (isRegister && registerPasswordInvalid) ||
+    (isRegister && confirmDirty && !passwordsMatch);
 
   return (
     <section className="auth-card" aria-labelledby="auth-title">
@@ -339,6 +483,7 @@ function AuthPanel({
             setConfirmMasterPassword("");
             setShowMasterPassword(false);
             setShowConfirmMasterPassword(false);
+            setIsCaptchaVerified(false);
           }}
         >
           Iniciar sesión
@@ -353,18 +498,20 @@ function AuthPanel({
             setConfirmMasterPassword("");
             setShowMasterPassword(false);
             setShowConfirmMasterPassword(false);
+            setIsCaptchaVerified(false);
           }}
         >
           Crear cuenta
         </button>
       </div>
-      <form className="auth-form" onSubmit={onSubmit}>
+      <form className="auth-form" onSubmit={onSubmit} noValidate>
         <label htmlFor="email">Correo electrónico</label>
         <input
           id="email"
+          name="username"
           type="email"
           maxLength={FIELD_LIMITS.email}
-          autoComplete="email"
+          autoComplete="username email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
@@ -373,6 +520,7 @@ function AuthPanel({
         <div className="auth-password-wrapper">
           <input
             id="master-password"
+            name="password"
             type={showMasterPassword ? "text" : "password"}
             maxLength={FIELD_LIMITS.masterPassword}
             minLength={12}
@@ -402,6 +550,17 @@ function AuthPanel({
             )}
           </button>
         </div>
+
+        {/* Aviso explícito con todos los requisitos cuando la contraseña maestra no es válida */}
+        {passwordRequirementsInvalid && (
+          <p className="feedback error" role="alert">
+            {MASTER_PASSWORD_REQUIREMENTS}
+          </p>
+        )}
+
+        {/* Medidor de protocolo de seguridad y entropía: solo en registro, no en login */}
+        {isRegister && <PasswordProtocolMeter password={masterPassword} minLength={12} />}
+
         {isRegister && (
           <>
             <label htmlFor="confirm-master-password">Confirmar contraseña maestra</label>
@@ -459,6 +618,10 @@ function AuthPanel({
             )}
           </>
         )}
+
+        {/* Desafío CAPTCHA antibot para proteger el inicio de sesión y registro */}
+        <CaptchaBox onVerifyChange={setIsCaptchaVerified} />
+
         <button className="primary-button" type="submit" disabled={submitDisabled}>
           {busy
             ? "Procesando..."
@@ -492,6 +655,7 @@ function App() {
   const [email, setEmail] = useState("");
   const [masterPassword, setMasterPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
   const [credentials, setCredentials] = useState<
     Array<Credential & { id: number | string }>
@@ -513,16 +677,21 @@ function App() {
   const [isCheckingBreach, setIsCheckingBreach] = useState(false);
   const [breachError, setBreachError] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [confirmMasterPassword, setConfirmMasterPassword] = useState("");
   const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [showConfirmMasterPassword, setShowConfirmMasterPassword] = useState(false);
+  const [showCredentialPassword, setShowCredentialPassword] = useState(false);
+  const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
+  const extensionItemsRef = useRef<ExtensionVaultItem[]>([]);
+  const wasAuthenticatedRef = useRef(false);
 
   function addToast(msg: string, type: Toast["type"] = "success") {
     const id = ++toastIdRef.current;
     setToasts((prev) => [...prev, { id, message: msg, type }]);
     setTimeout(() => {
-      setToasts((prev) => prev.map((t) => t.id === id ? { ...t, exiting: true } : t));
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
     }, 2750);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -546,7 +715,6 @@ function App() {
   async function handleCheckBreach() {
     setIsCheckingBreach(true);
     setBreachError(null);
-
     try {
       const alerts = await checkCredentialsBreach(credentials);
       setBreachedAlerts(alerts);
@@ -577,32 +745,113 @@ function App() {
     if (deletingId === null && modal.open) modal.close();
   }, [deletingId]);
 
+  /** Mantiene un espejo en memoria de lo que se publica hacia la extensión. */
+  useEffect(() => {
+    extensionItemsRef.current =
+      authenticated && credentials.length > 0 ? toExtensionItems(credentials) : [];
+  }, [authenticated, credentials]);
+
+  /**
+   * Sincroniza la bóveda desbloqueada con la extensión Arca Shield.
+   * La copia desaparece en cuanto se cierra la sesión o se vacía la bóveda.
+   */
+  useEffect(() => {
+    if (authenticated) {
+      wasAuthenticatedRef.current = true;
+      if (credentials.length > 0) publishVault(toExtensionItems(credentials));
+      else clearVault();
+    } else if (wasAuthenticatedRef.current) {
+      wasAuthenticatedRef.current = false;
+      clearVault();
+    }
+  }, [authenticated, credentials]);
+
+  /** Responde a las peticiones de sincronización que envía la extensión. */
+  useEffect(() => installExtensionBridge(() => extensionItemsRef.current), []);
+
+  /** Borra la copia de la extensión al cerrar o recargar la pestaña de la bóveda. */
+  useEffect(() => {
+    const handlePageHide = () => clearVault();
+    window.addEventListener("pagehide", handlePageHide);
+    return () => window.removeEventListener("pagehide", handlePageHide);
+  }, []);
+
+  /** Marca la sesión como abierta y carga los blobs de la bóveda para descifrarlos. */
+  async function unlockVault() {
+    setAuthenticated(true);
+    setDecrypting(true);
+    setCredentials(await listCredentials());
+    setDecrypting(false);
+  }
+
   /** Registra una cuenta o inicia sesión y carga las credenciales tras desbloquear la bóveda. */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
     setMessage("");
+
+    if (!isCaptchaVerified) {
+      setError("Por favor completa la verificación de seguridad CAPTCHA");
+      setBusy(false);
+      return;
+    }
+
+    // El formulario usa noValidate, así que la validación de campos se hace aquí.
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
+      setBusy(false);
+      return;
+    }
+
+    // El protocolo de contraseña segura se valida SOLO en registro (cero conocimiento).
+    // En login nunca se re-valida la entropía: el servidor deriva las claves del hash
+    // sin conocer nunca el texto plano de la contraseña maestra.
+    if (view === "register") {
+      const protocol = evaluatePasswordProtocol(masterPassword, 12);
+      if (!protocol.isValid) {
+        setError(
+          `${MASTER_PASSWORD_REQUIREMENTS} No se cumple: ${protocol.errors.join(", ")}.`
+        );
+        setBusy(false);
+        return;
+      }
+    } else {
+      const passwordError = validateMasterPassword(masterPassword);
+      if (passwordError) {
+        setError(masterPassword ? MASTER_PASSWORD_REQUIREMENTS : passwordError);
+        setBusy(false);
+        return;
+      }
+    }
+
     try {
       if (view === "register") {
         if (masterPassword !== confirmMasterPassword) {
           addToast("Las contraseñas no coinciden", "error");
+          setBusy(false);
           return;
         }
         await registerWithMasterPassword(email, masterPassword);
         setView("login");
+        setIsCaptchaVerified(false);
         setMessage("Cuenta creada. Inicia sesión para abrir tu bóveda.");
       } else {
-        await loginWithMasterPassword(email, masterPassword);
-        setAuthenticated(true);
-        setDecrypting(true);
-        setCredentials(await listCredentials());
-        setDecrypting(false);
+        const outcome = await loginWithMasterPassword(email, masterPassword);
+        if (outcome === "mfa-required") {
+          // La bóveda sigue cerrada: solo se muestra el reto del segundo factor.
+          setMfaChallenge(true);
+          setMessage("");
+        } else {
+          await unlockVault();
+        }
       }
       setMasterPassword("");
       setConfirmMasterPassword("");
       setShowMasterPassword(false);
       setShowConfirmMasterPassword(false);
+      setIsCaptchaVerified(false);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -612,6 +861,31 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Verifica el código TOTP o de respaldo y, si es válido, desenvuelve la bóveda. */
+  async function handleMfaVerify(code: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await completeMfaLogin(code);
+      await unlockVault();
+    } catch (verifyError) {
+      setError(
+        verifyError instanceof Error
+          ? verifyError.message
+          : "No se pudo verificar el código",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Vuelve al formulario de contraseña; el reto pendiente se reutiliza si se reintenta. */
+  function handleMfaBack() {
+    setMfaChallenge(false);
+    setError("");
+    setMessage("");
   }
   /** Cierra la sesión remota y limpia todo el estado sensible de la interfaz. */
   async function handleLogout() {
@@ -645,6 +919,7 @@ function App() {
       setBusy(false);
     }
   }
+
   /** Cambia la contraseña localmente y obliga a iniciar una sesión nueva. */
   async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -658,6 +933,14 @@ function App() {
     try {
       if (newPassword !== confirmPassword)
         throw new Error("Las nuevas contraseñas no coinciden");
+
+      const protocol = evaluatePasswordProtocol(newPassword, 12);
+      if (!protocol.isValid) {
+        throw new Error(
+          `La nueva contraseña debe cumplir el protocolo de seguridad: ${protocol.errors[0]}`
+        );
+      }
+
       await changeMasterPassword(currentPassword, newPassword);
       setAuthenticated(false);
       setDecrypting(false);
@@ -678,6 +961,7 @@ function App() {
       setBusy(false);
     }
   }
+
   async function handleDeleteAccount() {
     setIsDeletingAccount(true);
     setError("");
@@ -692,6 +976,7 @@ function App() {
       setIsAccountModalOpen(false);
       setSelectedCredentialId(null);
       setDeletePassword("");
+      setDeleteConfirmOpen(false);
       setView("login");
       setShowAccess(true);
       addToast("Cuenta eliminada permanentemente.", "success");
@@ -793,21 +1078,25 @@ function App() {
     setIsCredentialModalOpen(false);
     setEditingId(null);
     setCredential(emptyCredential);
+    setShowCredentialPassword(false);
     setError("");
   }
   function closeAccountModal() {
     setIsAccountModalOpen(false);
     setError("");
     setDeletePassword("");
+    setDeleteConfirmOpen(false);
   }
   function openAccountModal() {
     setError("");
     setDeletePassword("");
+    setDeleteConfirmOpen(false);
     setIsAccountModalOpen(true);
   }
   function openNewCredentialModal() {
     setEditingId(null);
     setCredential(emptyCredential);
+    setShowCredentialPassword(false);
     setError("");
     setIsCredentialModalOpen(true);
   }
@@ -816,6 +1105,7 @@ function App() {
     if (!selectedCredential) return;
     setEditingId(id);
     setCredential(selectedCredential);
+    setShowCredentialPassword(false);
     setError("");
     setIsCredentialModalOpen(true);
   }
@@ -910,31 +1200,44 @@ function App() {
             </header>
           </div>
           <div className="auth-page">
-            <AuthPanel
-              view={view}
-              setView={(nextView) => {
-                setView(nextView);
-                setError("");
-                setMessage("");
-                setConfirmMasterPassword("");
-                setShowMasterPassword(false);
-                setShowConfirmMasterPassword(false);
-              }}
-              email={email}
-              setEmail={setEmail}
-              masterPassword={masterPassword}
-              setMasterPassword={setMasterPassword}
-              confirmMasterPassword={confirmMasterPassword}
-              setConfirmMasterPassword={setConfirmMasterPassword}
-              showMasterPassword={showMasterPassword}
-              setShowMasterPassword={setShowMasterPassword}
-              showConfirmMasterPassword={showConfirmMasterPassword}
-              setShowConfirmMasterPassword={setShowConfirmMasterPassword}
-              busy={busy}
-              message={message}
-              error={error}
-              onSubmit={handleSubmit}
-            />
+            {mfaChallenge ? (
+              <MfaChallenge
+                email={email}
+                busy={busy}
+                error={error}
+                onVerify={handleMfaVerify}
+                onBack={handleMfaBack}
+              />
+            ) : (
+              <AuthPanel
+                view={view}
+                setView={(nextView) => {
+                  setView(nextView);
+                  setError("");
+                  setMessage("");
+                  setConfirmMasterPassword("");
+                  setShowMasterPassword(false);
+                  setShowConfirmMasterPassword(false);
+                  setIsCaptchaVerified(false);
+                }}
+                email={email}
+                setEmail={setEmail}
+                masterPassword={masterPassword}
+                setMasterPassword={setMasterPassword}
+                confirmMasterPassword={confirmMasterPassword}
+                setConfirmMasterPassword={setConfirmMasterPassword}
+                showMasterPassword={showMasterPassword}
+                setShowMasterPassword={setShowMasterPassword}
+                showConfirmMasterPassword={showConfirmMasterPassword}
+                setShowConfirmMasterPassword={setShowConfirmMasterPassword}
+                busy={busy}
+                message={message}
+                error={error}
+                onSubmit={handleSubmit}
+                isCaptchaVerified={isCaptchaVerified}
+                setIsCaptchaVerified={setIsCaptchaVerified}
+              />
+            )}
           </div>
         </div>
       </main>
@@ -967,6 +1270,11 @@ function App() {
         onSubmitPassword={handleChangePassword}
         deletePassword={deletePassword}
         onDeletePasswordChange={setDeletePassword}
+        deleteConfirmOpen={deleteConfirmOpen}
+        onDeleteConfirmOpenChange={(open) => {
+          setDeleteConfirmOpen(open);
+          if (open) setDeletePassword("");
+        }}
         onDeleteConfirm={handleDeleteAccount}
         isDeleting={isDeletingAccount}
         deleteError={error}
@@ -1005,18 +1313,41 @@ function App() {
               required
             />
             <label htmlFor="credential-password">Contraseña</label>
-            <input
-              id="credential-password"
-              maxLength={FIELD_LIMITS.password}
-              type="password"
-              autoComplete="new-password"
-              placeholder="Contraseña del acceso"
-              value={credential.password}
-              onChange={(event) =>
-                setCredential({ ...credential, password: event.target.value })
-              }
-              required
-            />
+            <div className="auth-password-wrapper">
+              <input
+                id="credential-password"
+                maxLength={FIELD_LIMITS.password}
+                type={showCredentialPassword ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="Contraseña del acceso"
+                value={credential.password}
+                onChange={(event) =>
+                  setCredential({ ...credential, password: event.target.value })
+                }
+                required
+              />
+              <button
+                className="auth-eye-button"
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowCredentialPassword(!showCredentialPassword)}
+                aria-label={showCredentialPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showCredentialPassword ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
+            <PasswordProtocolMeter password={credential.password} minLength={8} />
             <PasswordGenerator
               onGenerate={(password) => setCredential({ ...credential, password })}
             />

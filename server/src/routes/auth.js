@@ -5,16 +5,34 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const express = require('express');
 const { requireAuth } = require('../middleware/requireAuth');
+const { requireMfaPending } = require('../middleware/requireMfaPending');
+const {
+  buildOtpauthUri,
+  decryptSecret,
+  encryptSecret,
+  generateTotpSecret,
+  verifyTotpCode,
+} = require('../totp-secret');
+const {
+  findMatchingBackupCode,
+  generateBackupCodes,
+  hashBackupCode,
+} = require('../mfa-backup-codes');
 const {
   changeMasterPasswordSchema,
   deleteAccountSchema,
   loginSchema,
+  mfaCodeSchema,
   parsePayload,
   registerSchema,
 } = require('../validation');
 
 const SALT_BYTES = 16;
 const JWT_COOKIE_NAME = 'session';
+const MFA_COOKIE_NAME = 'mfa';
+const MFA_COOKIE_TTL_MS = 5 * 60 * 1000; // El reto intermedio caduca rapido a proposito.
+// Ventana para confirmar el alta del MFA tras escanear el QR; mas alla se purga el secreto pendiente.
+const MFA_SETUP_TTL_MS = 15 * 60 * 1000;
 const DUMMY_AUTH_HASH = bcrypt.hashSync('dummy-auth-hash', 12);
 
 /** Normaliza el identificador de cuenta para que el email sea insensible a mayusculas. */
@@ -42,6 +60,26 @@ function getSessionCookieOptions() {
   };
 }
 
+/** Opciones del reto MFA intermadiario: misma politica de seguridad, pero efimero. */
+function getMfaCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE !== 'false',
+    sameSite: 'strict',
+    maxAge: MFA_COOKIE_TTL_MS,
+    path: '/',
+  };
+}
+
+/** Firma la cookie de sesion definitiva; se reutiliza tras verificar el segundo factor. */
+function signSessionCookie(response, user) {
+  const token = jwt.sign({ sub: String(user.id), sv: user.session_version }, getJwtSecret(), {
+    algorithm: 'HS256',
+    expiresIn: '8h',
+  });
+  response.cookie(JWT_COOKIE_NAME, token, getSessionCookieOptions());
+}
+
 async function withTransaction(dbPool, operation) {
   const client = await dbPool.connect();
   try {
@@ -60,6 +98,21 @@ async function withTransaction(dbPool, operation) {
 /** Genera un salt determinista para ocultar si un email existe en la base de datos. */
 function createFakeSalt(email) {
   return crypto.createHmac('sha256', getJwtSecret()).update(email).digest().subarray(0, SALT_BYTES);
+}
+
+/**
+ * Traduce los fallos conocidos del flujo MFA a respuestas HTTP concretas sin
+ * filtrar el motivo interno a un cliente no autorizado.
+ */
+function respondMfaError(error, response, next) {
+  if (Number.isInteger(error.statusCode) && error.publicMessage) {
+    return response.status(error.statusCode).json({ error: error.publicMessage });
+  }
+  // La configuracion del MFA depende de una variable de entorno del servidor.
+  if (error.code === 'TOTP_KEY_MISSING' || error.code === 'TOTP_KEY_INVALID') {
+    return response.status(500).json({ error: 'MFA is not configured on the server' });
+  }
+  return next(error);
 }
 
 /**
@@ -84,10 +137,43 @@ function createAuthRouter({ dbPool }) {
     legacyHeaders: false,
     message: { error: 'Too many salt requests. Try again later.' },
   });
+  // El registro ejecuta un bcrypt cost 12 por intento y responde 409 si el email
+  // ya existe: sin limite seria a la vez un oraculo de enumeracion y un vector
+  // de agotamiento de CPU para el servidor.
+  const registerLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many registration attempts. Try again later.' },
+  });
+  // El verificador de codigos es la puerta mas sensible: limite corto y generoso
+  // solo en ventana, para que un atacante no pruebe codigos indefinidamente.
+  const mfaVerifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many verification attempts. Try again later.' },
+  });
+  const mfaSetupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many MFA configuration attempts. Try again later.' },
+  });
+  const mfaDisableLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many MFA disable attempts. Try again later.' },
+  });
 
   // Valida, rehashea y persiste solo el material derivado que prepara el cliente.
   // POST /register: almacena el Auth Hash rehasheado y los blobs cifrados del cliente.
-  router.post('/register', async (request, response, next) => {
+  router.post('/register', registerLimiter, async (request, response, next) => {
     const payload = parsePayload(registerSchema, request.body);
     if (!payload) {
       return response.status(400).json({ error: 'Invalid registration payload' });
@@ -137,7 +223,7 @@ function createAuthRouter({ dbPool }) {
   });
 
   // Compara incluso contra un hash ficticio para que los emails inexistentes no tengan un camino barato.
-  // POST /login: verifica el Auth Hash y devuelve la vault key envuelta junto con la sesion.
+  // POST /login: verifica el Auth Hash y, sin MFA, devuelve la vault key envuelta junto con la sesion.
   router.post('/login', loginLimiter, async (request, response, next) => {
     const payload = parsePayload(loginSchema, request.body);
     if (!payload) {
@@ -147,7 +233,7 @@ function createAuthRouter({ dbPool }) {
     const email = payload.email;
     try {
       const result = await dbPool.query(
-        `SELECT id, auth_hash_hashed, wrapped_vault_key, wrap_iv, session_version
+        `SELECT id, auth_hash_hashed, wrapped_vault_key, wrap_iv, session_version, mfa_enabled
          FROM users WHERE email = $1`,
         [email],
       );
@@ -160,14 +246,281 @@ function createAuthRouter({ dbPool }) {
         return response.status(401).json({ error: 'Invalid credentials' });
       }
 
-      const token = jwt.sign({ sub: String(user.id), sv: user.session_version }, getJwtSecret(), {
-        algorithm: 'HS256',
-        expiresIn: '8h',
-      });
-      response.cookie(JWT_COOKIE_NAME, token, getSessionCookieOptions());
+      // Con MFA activo NO se entrega la vault key ni se firma la sesion: solo
+      // un reto efimero que da derecho a POST /mfa/verify tras validar el codigo.
+      if (user.mfa_enabled) {
+        const mfaToken = jwt.sign(
+          { sub: String(user.id), sv: user.session_version, purpose: 'mfa' },
+          getJwtSecret(),
+          { algorithm: 'HS256', expiresIn: '5m' },
+        );
+        response.cookie(MFA_COOKIE_NAME, mfaToken, getMfaCookieOptions());
+        return response.json({ mfaRequired: true });
+      }
+
+      signSessionCookie(response, user);
       return response.json({ wrappedVaultKey: user.wrapped_vault_key, wrapIv: user.wrap_iv });
     } catch (error) {
       return next(error);
+    }
+  });
+
+  // ── MFA basado en TOTP ─────────────────────────────────────────────────────
+  // GET /mfa/status: indica si la cuenta tiene el segundo factor activo.
+  router.get('/mfa/status', requireAuth({ dbPool }), async (request, response, next) => {
+    try {
+      const result = await dbPool.query('SELECT mfa_enabled FROM users WHERE id = $1', [request.user.id]);
+      const user = result.rows[0];
+      if (!user) return response.status(401).json({ error: 'Authentication required' });
+      return response.json({ enabled: Boolean(user.mfa_enabled) });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  // POST /mfa/setup: genera y guarda (cifrado) un secreto pendiente de confirmar.
+  // El secreto se devuelve en claro una unica vez por el canal autenticado para
+  // que el cliente muestre el QR; a partir de ahi solo vive cifrado en la BD.
+  router.post('/mfa/setup', mfaSetupLimiter, requireAuth({ dbPool }), async (request, response, next) => {
+    try {
+      const result = await dbPool.query(
+        'SELECT id, email, mfa_enabled FROM users WHERE id = $1',
+        [request.user.id],
+      );
+      const user = result.rows[0];
+      if (!user) return response.status(401).json({ error: 'Authentication required' });
+      if (user.mfa_enabled) return response.status(409).json({ error: 'MFA is already enabled' });
+
+      const secret = generateTotpSecret();
+      await dbPool.query(
+        `UPDATE users SET mfa_secret = $1, mfa_last_counter = 0, mfa_setup_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [encryptSecret(secret), request.user.id],
+      );
+      return response.json({ secret, otpauthUri: buildOtpauthUri(secret, user.email) });
+    } catch (error) {
+      return respondMfaError(error, response, next);
+    }
+  });
+
+  // POST /mfa/enable: confirma el secreto pendiente con un codigo valido, emite
+  // los backup codes (unico momento en que se ven) y revoca las demas sesiones
+  // incrementando session_version; la cookie actual se re-firma con el nuevo sv.
+  router.post('/mfa/enable', mfaSetupLimiter, requireAuth({ dbPool }), async (request, response, next) => {
+    const payload = parsePayload(mfaCodeSchema, request.body);
+    if (!payload) {
+      return response.status(400).json({ error: 'Invalid MFA payload' });
+    }
+
+    try {
+      // El secreto pendiente caduca a los 15 minutos. La purga se hace aqui,
+      // fuera de la transaccion, para que su ROLLBACK no la deshaga; la guarda
+      // mfa_enabled = FALSE evita borrar el secreto de una cuenta que confirme
+      // el alta en otra peticion concurrente. rowCount > 0 significa que el
+      // setup estaba caducado y acaba de descartarse.
+      const expired = await dbPool.query(
+        `UPDATE users SET mfa_secret = NULL, mfa_setup_at = NULL
+         WHERE id = $1 AND mfa_enabled = FALSE AND mfa_secret IS NOT NULL
+           AND (mfa_setup_at IS NULL OR mfa_setup_at < $2)
+         RETURNING id`,
+        [request.user.id, new Date(Date.now() - MFA_SETUP_TTL_MS)],
+      );
+      if (expired.rowCount > 0) {
+        return response.status(409).json({ error: 'MFA setup is not pending' });
+      }
+
+      const outcome = await withTransaction(dbPool, async (client) => {
+        const result = await client.query(
+          'SELECT id, email, mfa_secret, mfa_enabled FROM users WHERE id = $1 FOR UPDATE',
+          [request.user.id],
+        );
+        const user = result.rows[0];
+        if (!user || !user.mfa_secret || user.mfa_enabled) {
+          const error = new Error('MFA setup is not pending');
+          error.statusCode = 409;
+          error.publicMessage = 'MFA setup is not pending';
+          throw error;
+        }
+
+        // El codigo de confirmacion NO consume el contador anti-replay: solo se
+        // registran los codigos usados al iniciar sesion. Asi, el usuario puede
+        // salir y volver a entrar de inmediato con el mismo codigo que acaba de
+        // ver al activar, sin abrir una ventana de reutilizacion relevante
+        // (entrar exige tambien la contrasena maestra).
+        const confirmed = verifyTotpCode(decryptSecret(user.mfa_secret), payload.code) !== null;
+        if (!confirmed) {
+          const error = new Error('Invalid verification code');
+          error.statusCode = 401;
+          error.publicMessage = 'Invalid verification code';
+          throw error;
+        }
+
+        // Los codigos de respaldo se generan aqui; bcrypt cost 12, sin texto plano en BD.
+        const backupCodes = generateBackupCodes();
+        await client.query('DELETE FROM mfa_backup_codes WHERE user_id = $1', [request.user.id]);
+        for (const backupCode of backupCodes) {
+          await client.query(
+            'INSERT INTO mfa_backup_codes (user_id, code_hash) VALUES ($1, $2)',
+            [request.user.id, await hashBackupCode(backupCode)],
+          );
+        }
+
+        await client.query(
+          `UPDATE users SET mfa_enabled = TRUE, mfa_setup_at = NULL,
+             session_version = session_version + 1
+           WHERE id = $1`,
+          [request.user.id],
+        );
+        const versionResult = await client.query(
+          'SELECT session_version FROM users WHERE id = $1',
+          [request.user.id],
+        );
+        return { sessionVersion: versionResult.rows[0].session_version, backupCodes };
+      });
+
+      signSessionCookie(response, { id: request.user.id, session_version: outcome.sessionVersion });
+      return response.json({ backupCodes: outcome.backupCodes });
+    } catch (error) {
+      return respondMfaError(error, response, next);
+    }
+  });
+
+  // POST /mfa/verify: segundo paso del login. Acepta un codigo TOTP sin
+  // reutilizar (anti-replay) o un backup code de un solo uso, y solo entonces
+  // entrega la vault key y firma la sesion definitiva.
+  router.post('/mfa/verify', mfaVerifyLimiter, requireMfaPending({ dbPool }), async (request, response, next) => {
+    const payload = parsePayload(mfaCodeSchema, request.body);
+    if (!payload) {
+      return response.status(400).json({ error: 'Invalid MFA payload' });
+    }
+
+    try {
+      const code = payload.code;
+      let matchedCounter = null;
+      let usedBackupCode = false;
+
+      if (/^\d{6}$/.test(code)) {
+        matchedCounter = verifyTotpCode(decryptSecret(request.user.mfaSecret), code);
+        if (matchedCounter === null) {
+          return response.status(401).json({ error: 'Invalid verification code' });
+        }
+      } else {
+        const pendingCodes = await dbPool.query(
+          'SELECT id, code_hash FROM mfa_backup_codes WHERE user_id = $1 AND used_at IS NULL',
+          [request.user.id],
+        );
+        const matchedRow = await findMatchingBackupCode(code, pendingCodes.rows);
+        if (!matchedRow) {
+          return response.status(401).json({ error: 'Invalid verification code' });
+        }
+        // Reclamo atomico del codigo de respaldo: la condicion used_at IS NULL
+        // garantiza que, ante dos peticiones concurrentes con el mismo codigo,
+        // solo una lo marque como usado; la otra recibe rowCount 0 y se rechaza.
+        const claimedCode = await dbPool.query(
+          'UPDATE mfa_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE id = $1 AND used_at IS NULL',
+          [matchedRow.id],
+        );
+        if (claimedCode.rowCount === 0) {
+          return response.status(401).json({ error: 'Invalid verification code' });
+        }
+        usedBackupCode = true;
+      }
+
+      if (usedBackupCode) {
+        // El uso de un backup code resetea el contador para que los codigos
+        // TOTP futuros no queden bloqueados por pasos antiguos ya consumidos.
+        await dbPool.query('UPDATE users SET mfa_last_counter = 0 WHERE id = $1', [request.user.id]);
+      } else {
+        // Reclamo atomico del time-step: es el propio anti-replay, no un mero
+        // almacenamiento. AND mfa_last_counter < $1 hace que el UPDATE solo
+        // tenga exito si nadie consumio ese paso; ante peticiones concurrentes
+        // con el mismo codigo, PostgreSQL serializa por bloqueo de fila, una
+        // obtiene rowCount 1 y la otra rowCount 0 -> 401.
+        const claimedStep = await dbPool.query(
+          'UPDATE users SET mfa_last_counter = $1 WHERE id = $2 AND mfa_last_counter < $1',
+          [matchedCounter, request.user.id],
+        );
+        if (claimedStep.rowCount === 0) {
+          return response.status(401).json({ error: 'Invalid verification code' });
+        }
+      }
+
+      const userResult = await dbPool.query(
+        'SELECT id, session_version, wrapped_vault_key, wrap_iv FROM users WHERE id = $1',
+        [request.user.id],
+      );
+      const user = userResult.rows[0];
+      if (!user) return response.status(401).json({ error: 'MFA verification required' });
+
+      response.clearCookie(MFA_COOKIE_NAME, getMfaCookieOptions());
+      signSessionCookie(response, user);
+      return response.json({
+        wrappedVaultKey: user.wrapped_vault_key,
+        wrapIv: user.wrap_iv,
+        ...(usedBackupCode ? { usedBackupCode: true } : {}),
+      });
+    } catch (error) {
+      return respondMfaError(error, response, next);
+    }
+  });
+
+  // POST /mfa/disable: exige posesion del segundo factor (codigo o backup code)
+  // para desactivarlo; un ladron de cookie de sesion no podria apagar el MFA.
+  router.post('/mfa/disable', mfaDisableLimiter, requireAuth({ dbPool }), async (request, response, next) => {
+    const payload = parsePayload(mfaCodeSchema, request.body);
+    if (!payload) {
+      return response.status(400).json({ error: 'Invalid MFA payload' });
+    }
+
+    try {
+      const sessionVersion = await withTransaction(dbPool, async (client) => {
+        const result = await client.query(
+          'SELECT id, mfa_secret, mfa_enabled FROM users WHERE id = $1 FOR UPDATE',
+          [request.user.id],
+        );
+        const user = result.rows[0];
+        if (!user || !user.mfa_enabled || !user.mfa_secret) {
+          const error = new Error('MFA is not enabled');
+          error.statusCode = 409;
+          error.publicMessage = 'MFA is not enabled';
+          throw error;
+        }
+
+        let authorized = false;
+        if (/^\d{6}$/.test(payload.code)) {
+          authorized = verifyTotpCode(decryptSecret(user.mfa_secret), payload.code) !== null;
+        } else {
+          const codeRows = await client.query(
+            'SELECT id, code_hash FROM mfa_backup_codes WHERE user_id = $1 AND used_at IS NULL',
+            [request.user.id],
+          );
+          authorized = (await findMatchingBackupCode(payload.code, codeRows.rows)) !== null;
+        }
+        if (!authorized) {
+          const error = new Error('Invalid verification code');
+          error.statusCode = 401;
+          error.publicMessage = 'Invalid verification code';
+          throw error;
+        }
+
+        await client.query('DELETE FROM mfa_backup_codes WHERE user_id = $1', [request.user.id]);
+        await client.query(
+          `UPDATE users SET mfa_secret = NULL, mfa_enabled = FALSE, mfa_last_counter = 0,
+             mfa_setup_at = NULL, session_version = session_version + 1
+           WHERE id = $1`,
+          [request.user.id],
+        );
+        const versionResult = await client.query(
+          'SELECT session_version FROM users WHERE id = $1',
+          [request.user.id],
+        );
+        return versionResult.rows[0].session_version;
+      });
+
+      signSessionCookie(response, { id: request.user.id, session_version: sessionVersion });
+      return response.sendStatus(204);
+    } catch (error) {
+      return respondMfaError(error, response, next);
     }
   });
 
@@ -255,6 +608,7 @@ function createAuthRouter({ dbPool }) {
         }
 
         await client.query('DELETE FROM vault_items WHERE user_id = $1', [request.user.id]);
+        await client.query('DELETE FROM mfa_backup_codes WHERE user_id = $1', [request.user.id]);
         await client.query('DELETE FROM users WHERE id = $1', [request.user.id]);
       });
 

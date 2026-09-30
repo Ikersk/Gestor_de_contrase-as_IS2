@@ -24,6 +24,7 @@
     "express-rate-limit": "latest",
     "helmet": "^8.3.0",
     "jsonwebtoken": "latest",
+    "otpauth": "^9.5.2",
     "pg": "latest",
     "zod": "^4.6.5"
   },

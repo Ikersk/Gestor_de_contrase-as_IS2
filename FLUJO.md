@@ -196,6 +196,35 @@ Vault Key = AES-GCM-Decrypt(Encryption Key, wrapIv, wrappedVaultKey)
 
 Si la contrasena es incorrecta, la autenticacion falla o AES-GCM no puede validar el blob. La Vault Key recuperada se guarda solo en la variable de memoria `vaultKey`.
 
+### Inicio de sesion con MFA (TOTP)
+
+Si la cuenta tiene MFA activado, el Paso 3 no devuelve la Vault Key: responde `200 {mfaRequired: true}` y emite una cookie temporal `mfa` (httpOnly, SameSite=Strict, 5 minutos) que solo autoriza a completar la verificacion.
+
+```mermaid
+flowchart TD
+    L[POST /login con authHash] --> M{mfa_enabled?}
+    M -- no --> K[Cookie session + wrappedVaultKey]
+    M -- si --> R[200 mfaRequired + cookie mfa]
+    R --> V[POST /mfa/verify con codigo TOTP o backup code]
+    V --> OK[Cookie session + wrappedVaultKey]
+    V --> KO[401 Invalid verification code]
+```
+
+Flujo de verificacion:
+
+1. El cliente envia `POST /api/auth/mfa/verify` con la cookie `mfa` y un codigo de 6 digitos de la app autenticadora (ventana de +/-1 periodo de 30 segundos) o un codigo de respaldo.
+2. El servidor compara en tiempo constante y aplica anti-replay: el time-step usado se guarda en `mfa_last_counter` y no puede volverse a usar.
+3. Con el codigo correcto se borra la cookie `mfa`, se firma la cookie de sesion normal y se devuelve `wrappedVaultKey` (y `usedBackupCode: true` si se uso un codigo de respaldo).
+4. Los 10 codigos de respaldo se generan al activar, se guardan hasheados con bcrypt (cost 12), se muestran una sola vez y cada uno sirve una sola vez.
+
+Activacion y desactivacion, desde "Mi cuenta" con la sesion ya iniciada:
+
+- `POST /mfa/setup` genera el secreto TOTP (20 bytes / 160 bits → 32 caracteres Base32), lo guarda cifrado con AES-GCM usando `TOTP_ENC_KEY` y devuelve el `otpauth://` para pintar el QR.
+- `POST /mfa/enable` exige un codigo valido, guarda los 10 codigos de respaldo hasheados e incrementa `session_version` (revoca el resto de sesiones sin matar la actual).
+- `POST /mfa/disable` exige un codigo TOTP o de respaldo, borra el secreto y los codigos de respaldo, e incrementa `session_version`.
+
+Limitacion: a diferencia del TOTP por credencial (que vive cifrado dentro de la propia boveda), el secreto TOTP de la cuenta esta cifrado con una clave del servidor (`TOTP_ENC_KEY`). El servidor puede descifrarlo porque el algoritmo exige conocerlo para verificar. Por eso el MFA de cuenta protege frente a robos de contrasena, no frente a un servidor malicioso.
+
 ## 5. Guardar una credencial
 
 El usuario introduce:
@@ -385,18 +414,18 @@ El sistema verifica automáticamente si alguna contraseña de la bóveda ha sido
 
 ### Resultados:
 
-Los resultados se muestran en el Security Dashboard como parte de la métrica "Brechas HIBP". Las credenciales comprometidas se marcan con un badge rojo en la lista izquierda del split-pane.
+Los resultados se muestran en el Security Dashboard como parte de la métrica "Brechas HIBP". Las credenciales comprometidas se marcan con un badge rojo en la lista de credenciales.
 
 ## 12. Funciones de interfaz (UI)
 
 ### 12.1 Security Dashboard
 
-Panel de métricas situado encima del split-pane de la bóveda. Muestra 4 tarjetas:
+Tira de 4 tarjetas de métricas (`MetricStrip`) en la parte superior de la columna central de la bóveda:
 
 - **Salud**: porcentaje calculado por `auditVault()` (credenciales débiles, reutilizadas, comprometidas).
-- **Credenciales**:数量 total de credenciales descifradas.
+- **Credenciales**: total de credenciales descifradas.
 - **Alertas**: suma de credenciales débiles + reutilizadas + comprometidas.
-- **Brechas HIBP**:数量 de credenciales con contraseñas en la base de datos de HIBP.
+- **Brechas HIBP**: número de credenciales con contraseñas en la base de datos de HIBP.
 
 El breach check se ejecuta automáticamente al entrar a la bóveda.
 
@@ -409,7 +438,7 @@ Modal accesible desde el botón en el footer del sidebar izquierdo. Contiene:
 
 ### 12.3 TOTP / 2FA
 
-Las credenciales pueden almacenar un secreto TOTP (`totpSecret`). El componente `CredentialDetail` muestra:
+Las credenciales pueden almacenar un secreto TOTP (`totpSecret`). El panel de detalle (`CredentialDetailPanel`) muestra:
 
 - El código TOTP actual (se renueva cada 30 segundos).
 - Un temporizador visual de tiempo restante.
@@ -422,7 +451,7 @@ El secreto TOTP se cifra dentro de la credencial junto con el resto de campos (t
 El formulario de credenciales incluye un generador seguro que:
 
 - Usa `crypto.getRandomValues` con rejection sampling para eliminar sesgo de módulo.
-- Permite configurar longitud (8-64), mayúsculas, minúsculas, números y símbolos.
+- Permite configurar longitud (8-32), mayúsculas, minúsculas, números y símbolos.
 - Muestra la contraseña generada con opción de ocultar/mostrar.
 - La contraseña se inserta directamente en el campo de la credencial.
 
@@ -430,15 +459,15 @@ El formulario de credenciales incluye un generador seguro que:
 
 Permite alternar entre tema oscuro (default) y claro. La preferencia se guarda en `localStorage` y se aplica al cargar la aplicación.
 
-### 12.6 Split-Pane Layout
+### 12.6 Layout de la bóveda
 
-La bóveda usa un layout de panel dividido:
+La bóveda usa un layout de 3 columnas (en pantallas grandes; en móvil se apila en una sola):
 
-- **Panel izquierdo** (340px): lista de credenciales con búsqueda, favicon, badges de alertas.
-- **Panel derecho** (resto): detalle de la credencial seleccionada (solo lectura) con opción de editar o eliminar.
-- **Dashboard** (arriba): Security Dashboard con métricas.
+- **Sidebar izquierdo** (240–248px): navegación, favoritos y botón de "Mi Cuenta".
+- **Columna central** (resto): tira de 4 métricas de seguridad, búsqueda y lista de credenciales con favicon y badges de alertas.
+- **Panel derecho** (300–420px): detalle de la credencial seleccionada (solo lectura) con opción de editar o eliminar.
 
-La credencial activa se resalta con fondo `#1F2937` y borde izquierdo cyan `#06B6D4`.
+La credencial activa se resalta con un borde y barra lateral azules (`blue-400`/`blue-500`).
 
 ### 12.7 Toast Notifications
 
@@ -448,14 +477,37 @@ Sistema de notificaciones efímeras (3 segundos) que aparecen en la esquina infe
 - Error de contraseñas no coincidentes en registro.
 - Otros eventos de éxito/error.
 
+### 12.8 Anti-Phishing
+
+Al rellenar o copiar credenciales, `anti-phishing.ts` compara el dominio real de la página con los dominios guardados en la credencial:
+
+- Extrae el dominio registrable (eTLD+1) y detecta typosquatting (Levenshtein), homógrafos/punycode, variantes de subdominio y conexiones sin `https`.
+- Todo se calcula en el navegador; no se envía nada por red.
+
+### 12.9 CAPTCHA (Proof-of-Work)
+
+Antes de registrar o iniciar sesión, `CaptchaBox` exige resolver un reto Proof-of-Work en el navegador (hash con prefijo de ceros) para dificultar el abuso automatizado.
+
+Es una mitigación **de cliente**: el servidor no valida el PoW, solo el rate limiting de la sección 16 protege esos endpoints.
+
+### 12.10 Extensión de navegador
+
+La extensión MV3 (*Arca Shield*) necesita la bóveda descifrada para ofrecer autofill. La app la publica mediante `extension-bridge.ts`:
+
+1. La app envía `window.postMessage(..., "*")` con las credenciales ya descifradas, solo mientras la bóveda está desbloqueada.
+2. El receptor (`extension-bridge.ts`) valida que el mensaje viene del mismo origen antes de aceptarlo.
+3. La extensión guarda la bóveda en `chrome.storage.session` (memoria volátil) y la retira al cerrar sesión o la pestaña.
+
+Este puente amplía lo que antes solo vivía en el estado de React: cualquier script con acceso a la página (XSS) podría leer esas credenciales mientras la bóveda esté desbloqueada. Se mitiga con la CSP estricta y con borrar el buffer en logout/cierre.
+
 ## 13. Datos visibles en cada capa
 
 | Capa | Puede ver | No debe ver |
 |---|---|---|
 | Formulario del navegador | Contrasena maestra y credencial mientras se editan | Nada fuera de la memoria de la pagina |
 | Cliente criptografico | Master Key, Encryption Key, Auth Hash y Vault Key durante la sesion | Persistencia de esas claves en Web Storage |
-| Red | Email, salt, iteraciones, Auth Hash, blobs Base64, cookie de sesion, primeros 5 chars SHA-1 (HIBP) | Contrasena maestra, Vault Key sin cifrar, credenciales legibles, hash completo SHA-1 |
-| Servidor | Email, Auth Hash recibido, hashes bcrypt, blobs, IVs, JWT y metadatos | Contrasena maestra, Master Key, Encryption Key, JSON de credenciales, hash SHA-1 |
+| Red | Email, salt, iteraciones, Auth Hash, blobs Base64, cookie de sesion, cookie `mfa` intermedia, codigos TOTP o de respaldo tecleados, primeros 5 chars SHA-1 (HIBP) | Contrasena maestra, Vault Key sin cifrar, credenciales legibles, hash completo SHA-1 |
+| Servidor | Email, Auth Hash recibido, hashes bcrypt, blobs, IVs, JWT y metadatos, secreto TOTP de cuenta cifrado con `TOTP_ENC_KEY` (se descifra para verificar) | Contrasena maestra, Master Key, Encryption Key, JSON de credenciales, hash SHA-1 |
 | Supabase | Hash bcrypt, salt, iteraciones, `wrapped_vault_key`, `wrap_iv`, IVs y ciphertexts | Credenciales legibles y claves sin envolver |
 
 ## 14. Comprobacion manual
@@ -465,11 +517,14 @@ Para revisar el almacenamiento, abre el SQL Editor de Supabase y ejecuta:
 ```sql
 SELECT * FROM users;
 SELECT * FROM vault_items;
+SELECT * FROM mfa_backup_codes;
 ```
 
 Los campos `auth_hash_hashed`, `wrapped_vault_key`, `wrap_iv`, `iv` y `ciphertext` deben aparecer como hashes o cadenas Base64. No deben contener directamente titulos, usuarios, contrasenas o URLs legibles.
 
-Para revisar la red, abre DevTools, entra en **Network** y observa las peticiones de registro, login y `/api/vault`. Comprueba que los cuerpos contienen solo material derivado o cifrado.
+En `users`, `mfa_secret` es un blob cifrado con AES-GCM (no Base32 legible) y `mfa_backup_codes` solo contiene hashes bcrypt; nunca los codigos de respaldo en texto plano.
+
+Para revisar la red, abre DevTools, entra en **Network** y observa las peticiones de registro, login y `/api/vault`. Comprueba que los cuerpos contienen solo material derivado o cifrado. En un login con MFA activo, la respuesta de `/api/auth/login` no debe contener `wrappedVaultKey` hasta que `/api/auth/mfa/verify` acepte el codigo.
 
 ## 15. Limitacion importante
 
@@ -478,3 +533,10 @@ Este modelo protege los datos frente a un servidor que almacena o transporta la 
 La CSP, SRI, la revision del codigo y una cadena de despliegue confiable reducen ese riesgo, pero no lo eliminan completamente.
 
 Ver también: sección "Limitaciones Conocidas" en el README.
+
+## 16. Límites de tasa y respuestas de error
+
+Todos los endpoints sensibles aplican `express-rate-limit` con 5 peticiones por 15 minutos: `register`, `salt`, `login`, `change-password`, `delete-account` y los endpoints MFA (`verify`, `setup`/`enable`, `disable`). El contador se hace por IP de cliente.
+
+- El servidor va pensado para ejecutarse **detrás de un proxy inverso** solo si se declara `TRUST_PROXY` (p. ej. `TRUST_PROXY=1`). Sin esa variable, `request.ip` es la IP del socket directo: correcto en local, pero detrás de un proxy haría que todos los usuarios compartieran contador.
+- Las respuestas de error son siempre JSON. Un handler global en `app.js` devuelve `{error}` con 400 (JSON roto o inválido), 413 (cuerpo > 2 MB), 404 (ruta inexistente) o 500 (error interno, sin volcar el stack trace).

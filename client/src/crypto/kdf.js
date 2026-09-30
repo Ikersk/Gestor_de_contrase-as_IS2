@@ -119,16 +119,18 @@ export async function deriveSubkeys(masterKey) {
     deriveContextKey('auth'),
   ]);
   const authKeyMaterial = new Uint8Array(authKeyBits);
+  const rawEncryptionKey = new Uint8Array(encryptionKeyBits);
   const encryptionKey = await crypto.subtle.importKey(
     'raw',
     encryptionKeyBits,
     { name: 'AES-GCM', length: 256 },
-    false,
+    true,
     ['encrypt', 'decrypt'],
   );
 
   return {
     encryptionKey,
+    rawEncryptionKey,
     authKeyMaterial,
     authHash: bytesToBase64(authKeyMaterial),
   };
